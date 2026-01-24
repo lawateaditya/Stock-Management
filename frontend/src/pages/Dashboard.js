@@ -26,20 +26,25 @@ const Dashboard = () => {
 
     const fetchStats = async () => {
       try {
-        const [itemsRes, inwardRes, issueRes] = await Promise.all([
-          api.get('/items'),
-          api.get('/inward'),
-          api.get('/issue'),
-        ]);
+        const promises = [];
+        
+        // Always try to fetch items
+        promises.push(api.get('/items').catch(() => ({ data: [] })));
+        
+        // Fetch inward/issue based on role
+        promises.push(api.get('/inward').catch(() => ({ data: [] })));
+        promises.push(api.get('/issue').catch(() => ({ data: [] })));
+
+        const [itemsRes, inwardRes, issueRes] = await Promise.all(promises);
 
         setStats({
           totalItems: itemsRes.data.length,
           totalInward: inwardRes.data.reduce((sum, entry) => sum + entry.inward_qty, 0),
           totalIssue: issueRes.data.reduce((sum, entry) => sum + entry.issued_qty, 0),
-          lowStock: 0, // Can be calculated from stock statement
+          lowStock: 0,
         });
       } catch (error) {
-        // User might not have permission for all stats
+        console.error('Failed to fetch stats:', error);
       }
     };
 
