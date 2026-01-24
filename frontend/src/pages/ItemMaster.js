@@ -3,17 +3,34 @@ import Layout from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '@/components/ui/table';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import api from '@/utils/api';
 import { toast } from 'sonner';
+import Papa from 'papaparse';
 
 const ItemMaster = () => {
   const [user, setUser] = useState(null);
   const [items, setItems] = useState([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [csvFile, setCsvFile] = useState(null);
+
   const [formData, setFormData] = useState({
     item_code: '',
     item_name: '',
@@ -31,7 +48,7 @@ const ItemMaster = () => {
     try {
       const response = await api.get('/auth/me');
       setUser(response.data);
-    } catch (error) {
+    } catch {
       toast.error('Failed to fetch user data');
     }
   };
@@ -40,9 +57,52 @@ const ItemMaster = () => {
     try {
       const response = await api.get('/items');
       setItems(response.data);
-    } catch (error) {
+    } catch {
       toast.error('Failed to fetch items');
     }
+  };
+
+  const handleCSVUpload = () => {
+    if (!csvFile) {
+      toast.error('Please select a CSV file');
+      return;
+    }
+
+    Papa.parse(csvFile, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const rows = results.data;
+
+        const requiredHeaders = ['item_code', 'item_name', 'category', 'uom', 'item_rate'];
+        const fileHeaders = Object.keys(rows[0] || {});
+        const missingHeaders = requiredHeaders.filter(h => !fileHeaders.includes(h));
+
+        if (missingHeaders.length > 0) {
+          toast.error(`Missing headers: ${missingHeaders.join(', ')}`);
+          return;
+        }
+
+        try {
+          for (const row of rows) {
+            await api.post('/items', {
+              item_code: row.item_code,
+              item_name: row.item_name,
+              category: row.category,
+              uom: row.uom,
+              item_rate: parseFloat(row.item_rate),
+            });
+          }
+
+          toast.success('CSV items imported successfully');
+          setCsvFile(null);
+          fetchItems();
+        } catch {
+          toast.error('Error importing CSV items');
+        }
+      },
+      error: () => toast.error('Failed to parse CSV file'),
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -109,16 +169,42 @@ const ItemMaster = () => {
 
   return (
     <Layout user={user}>
-      <div className="space-y-6" data-testid="item-master-page">
+      <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-bold">Item Master</h2>
             <p className="text-gray-600">Manage your inventory items</p>
           </div>
-          <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} data-testid="add-item-btn">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Item
-          </Button>
+
+          <div className="flex gap-2 items-center">
+            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Item
+            </Button>
+
+            <input
+              type="file"
+              accept=".csv"
+              className="hidden"
+              id="csvUpload"
+              onChange={(e) => setCsvFile(e.target.files[0])}
+            />
+
+            <Button
+              variant="outline"
+              onClick={() => document.getElementById('csvUpload').click()}
+            >
+              Upload CSV
+            </Button>
+
+            <Button
+              variant="secondary"
+              onClick={handleCSVUpload}
+              disabled={!csvFile}
+            >
+              Import
+            </Button>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow">
@@ -134,27 +220,28 @@ const ItemMaster = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((item) => (
-                <TableRow key={item.item_code} data-testid={`item-row-${item.item_code}`}>
+              {items.map(item => (
+                <TableRow key={item.item_code}>
                   <TableCell>{item.item_code}</TableCell>
                   <TableCell>{item.item_name}</TableCell>
                   <TableCell>{item.category}</TableCell>
                   <TableCell>{item.uom}</TableCell>
                   <TableCell>{item.item_rate.toFixed(2)}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(item)} data-testid={`edit-item-${item.item_code}`}>
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(item)}>
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(item.item_code)} data-testid={`delete-item-${item.item_code}`}>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(item.item_code)}>
                       <Trash2 className="h-4 w-4 text-red-600" />
                     </Button>
                   </TableCell>
                 </TableRow>
               ))}
+
               {items.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                    No items found. Add your first item to get started.
+                    No items found.
                   </TableCell>
                 </TableRow>
               )}
@@ -163,75 +250,70 @@ const ItemMaster = () => {
         </div>
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent data-testid="item-dialog">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>{editingItem ? 'Edit Item' : 'Add New Item'}</DialogTitle>
               <DialogDescription>
-                {editingItem ? 'Update item details' : 'Add a new item to your inventory'}
+                {editingItem ? 'Update item details' : 'Add a new item'}
               </DialogDescription>
             </DialogHeader>
+
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="item_code">Item Code</Label>
+                  <Label>Item Code</Label>
                   <Input
-                    id="item_code"
-                    data-testid="item-code-input"
                     value={formData.item_code}
-                    onChange={(e) => setFormData({ ...formData, item_code: e.target.value })}
                     disabled={!!editingItem}
+                    onChange={e => setFormData({ ...formData, item_code: e.target.value })}
                     required
                   />
                 </div>
+
                 <div>
-                  <Label htmlFor="item_name">Item Name</Label>
+                  <Label>Item Name</Label>
                   <Input
-                    id="item_name"
-                    data-testid="item-name-input"
                     value={formData.item_name}
-                    onChange={(e) => setFormData({ ...formData, item_name: e.target.value })}
+                    onChange={e => setFormData({ ...formData, item_name: e.target.value })}
                     required
                   />
                 </div>
+
                 <div>
-                  <Label htmlFor="category">Category</Label>
+                  <Label>Category</Label>
                   <Input
-                    id="category"
-                    data-testid="item-category-input"
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    onChange={e => setFormData({ ...formData, category: e.target.value })}
                     required
                   />
                 </div>
+
                 <div>
-                  <Label htmlFor="uom">UOM (Unit of Measure)</Label>
+                  <Label>UOM</Label>
                   <Input
-                    id="uom"
-                    data-testid="item-uom-input"
-                    placeholder="e.g., Pcs, Kg, Ltr"
                     value={formData.uom}
-                    onChange={(e) => setFormData({ ...formData, uom: e.target.value })}
+                    onChange={e => setFormData({ ...formData, uom: e.target.value })}
                     required
                   />
                 </div>
+
                 <div>
-                  <Label htmlFor="item_rate">Rate</Label>
+                  <Label>Rate</Label>
                   <Input
-                    id="item_rate"
-                    data-testid="item-rate-input"
                     type="number"
                     step="0.01"
                     value={formData.item_rate}
-                    onChange={(e) => setFormData({ ...formData, item_rate: e.target.value })}
+                    onChange={e => setFormData({ ...formData, item_rate: e.target.value })}
                     required
                   />
                 </div>
               </div>
+
               <DialogFooter className="mt-6">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" data-testid="save-item-btn">
+                <Button type="submit">
                   {editingItem ? 'Update' : 'Create'}
                 </Button>
               </DialogFooter>

@@ -24,10 +24,10 @@ function AppRouter() {
     <Routes>
       <Route path="/" element={<LoginPage />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/items" element={<ProtectedRoute allowedRoles={['admin']}><ItemMaster /></ProtectedRoute>} />
-      <Route path="/inward" element={<ProtectedRoute allowedRoles={['admin', 'inward_user']}><InwardPage /></ProtectedRoute>} />
-      <Route path="/issue" element={<ProtectedRoute allowedRoles={['admin', 'issuer_user']}><IssuePage /></ProtectedRoute>} />
-      <Route path="/stock" element={<ProtectedRoute allowedRoles={['admin']}><StockPage /></ProtectedRoute>} />
+      <Route path="/items" element={<ProtectedRoute><ItemMaster /></ProtectedRoute>} />
+      <Route path="/inward" element={<ProtectedRoute allowedRoles={['super_admin', 'inward_user']}><InwardPage /></ProtectedRoute>} />
+      <Route path="/issue" element={<ProtectedRoute allowedRoles={['super_admin', 'issuer_user']}><IssuePage /></ProtectedRoute>} />
+      <Route path="/stock" element={<ProtectedRoute allowedRoles={['super_admin']}><StockPage /></ProtectedRoute>} />
       <Route path="/users" element={<ProtectedRoute allowedRoles={['super_admin', 'admin']}><UsersPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

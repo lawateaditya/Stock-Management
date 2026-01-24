@@ -539,7 +539,7 @@ async def get_items(
 @api_router.post("/items", response_model=ItemMaster)
 async def create_item(
     item_input: ItemMasterCreate,
-    current_user: User = Depends(require_role([UserRole.ADMIN]))
+    current_user: User = Depends(require_role([UserRole.ADMIN]) or require_role([UserRole.SUPER_ADMIN]))
 ):
     existing_item = await db.item_master.find_one({"item_code": item_input.item_code})
     if existing_item:
@@ -565,7 +565,7 @@ async def create_item(
 async def update_item(
     item_code: str,
     item_update: ItemMasterUpdate,
-    current_user: User = Depends(require_role([UserRole.ADMIN]))
+    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN]))
 ):
     item_doc = await db.item_master.find_one({"item_code": item_code}, {"_id": 0})
     if not item_doc:
