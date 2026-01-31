@@ -5,10 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Package, TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
 import api from '@/utils/api';
 import { toast } from 'sonner';
+import { useUser } from '@/context/UserContext';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
+  const { user, loading } = useUser();
   const [stats, setStats] = useState({
     totalItems: 0,
     totalInward: 0,
@@ -17,15 +18,6 @@ const Dashboard = () => {
   });
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const response = await api.get('/auth/me');
-        setUser(response.data);
-      } catch (error) {
-        toast.error('Failed to fetch user data');
-      }
-    };
-
     const fetchStats = async () => {
       try {
         const promises = [];
@@ -50,7 +42,6 @@ const Dashboard = () => {
       }
     };
 
-    fetchUser();
     fetchStats();
   }, []);
 
@@ -85,7 +76,7 @@ const Dashboard = () => {
     },
   ];
 
-  if (!user) {
+  if (!user || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-lg">Loading...</div>

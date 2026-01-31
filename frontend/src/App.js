@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
+import { UserProvider } from '@/context/UserContext';
 import LoginPage from '@/pages/LoginPage';
 import AuthCallback from '@/pages/AuthCallback';
 import Dashboard from '@/pages/Dashboard';
@@ -40,8 +41,10 @@ function App() {
   return (
     <div className="App">
       <BrowserRouter>
-        <AppRouter />
-        <Toaster position="top-right" />
+        <UserProvider>
+          <AppRouter />
+          <Toaster position="top-right" />
+        </UserProvider>
       </BrowserRouter>
     </div>
   );
