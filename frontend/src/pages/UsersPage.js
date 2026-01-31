@@ -177,11 +177,21 @@ const UsersPage = () => {
                         <UserCheck className="h-4 w-4 text-green-600" />
                       )}
                     </Button>
-                    {user.role === 'super_admin' && (
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(u.user_id)} data-testid={`delete-user-${u.user_id}`}>
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </Button>
-                    )}
+                    {(() => {
+                      // Determine whether the logged-in user can see the delete action for this row
+                      if (!user) return null;
+                      const isSelf = user.user_id === u.user_id;
+                      const isSuperAdmin = user.role === 'super_admin';
+                      const isAdmin = user.role === 'admin';
+
+                      const canDelete = !isSelf && (isSuperAdmin || (isAdmin && u.role !== 'admin'));
+
+                      return canDelete ? (
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(u.user_id)} data-testid={`delete-user-${u.user_id}`}>
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      ) : null;
+                    })()}
                   </TableCell>
                 </TableRow>
               ))}

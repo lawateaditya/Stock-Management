@@ -659,6 +659,36 @@ async def create_inward_entry(
     
     return InwardEntry(**entry_doc_clean)
 
+@api_router.delete("/inward/{entry_id}")
+async def delete_inward_entry(
+    entry_id: str,
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.INWARD_USER, UserRole.SUPER_ADMIN]))
+):
+    # Find the inward entry
+    inward_entry = await db.tbl_inward.find_one({"entry_id": entry_id}, {"_id": 0})
+    
+    if not inward_entry:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Inward entry not found"
+        )
+    
+    # Check permissions - INWARD_USER can only delete their own entries
+    if current_user.role == UserRole.INWARD_USER and inward_entry["created_by"] != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own entries"
+        )
+    
+    # Delete all issues related to this inward's item
+    item_code = inward_entry["item_code"]
+    await db.tbl_issue.delete_many({"item_code": item_code})
+    
+    # Delete the inward entry
+    await db.tbl_inward.delete_one({"entry_id": entry_id})
+    
+    return {"message": "Inward entry and related issues deleted successfully"}
+
 # ==================== ISSUE ROUTES ====================
 
 @api_router.get("/issue", response_model=List[IssueEntry])
@@ -731,6 +761,32 @@ async def create_issue_entry(
     entry_doc_clean['created_at'] = datetime.fromisoformat(entry_doc_clean['created_at'])
     
     return IssueEntry(**entry_doc_clean)
+
+@api_router.delete("/issue/{entry_id}")
+async def delete_issue_entry(
+    entry_id: str,
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.ISSUER_USER, UserRole.SUPER_ADMIN]))
+):
+    # Find the issue entry
+    issue_entry = await db.tbl_issue.find_one({"entry_id": entry_id}, {"_id": 0})
+    
+    if not issue_entry:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue entry not found"
+        )
+    
+    # Check permissions - ISSUER_USER can only delete their own entries
+    if current_user.role == UserRole.ISSUER_USER and issue_entry["created_by"] != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own entries"
+        )
+    
+    # Delete the issue entry
+    await db.tbl_issue.delete_one({"entry_id": entry_id})
+    
+    return {"message": "Issue entry deleted successfully"}
 
 # ==================== STOCK STATEMENT ROUTES ====================
 

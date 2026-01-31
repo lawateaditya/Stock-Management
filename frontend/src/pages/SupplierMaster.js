@@ -12,6 +12,13 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -24,12 +31,58 @@ import api from '@/utils/api';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
 
+// Country, State, City Data
+const COUNTRY_STATE_CITY = {
+  'India': {
+    'Andhra Pradesh': ['Visakhapatnam', 'Vijayawada', 'Guntur', 'Tirupati'],
+    'Arunachal Pradesh': ['Itanagar', 'Naharlagun'],
+    'Assam': ['Guwahati', 'Silchar', 'Dibrugarh'],
+    'Bihar': ['Patna', 'Gaya', 'Bhagalpur'],
+    'Chhattisgarh': ['Raipur', 'Bilaspur', 'Durg'],
+    'Goa': ['Panaji', 'Margao'],
+    'Gujarat': ['Ahmedabad', 'Surat', 'Vadodara', 'Rajkot'],
+    'Haryana': ['Faridabad', 'Gurgaon', 'Hisar'],
+    'Himachal Pradesh': ['Shimla', 'Mandi'],
+    'Jharkhand': ['Ranchi', 'Jamshedpur', 'Dhanbad'],
+    'Karnataka': ['Bangalore', 'Mysore', 'Mangalore', 'Hubli'],
+    'Kerala': ['Kochi', 'Thiruvananthapuram', 'Kozhikode'],
+    'Madhya Pradesh': ['Indore', 'Bhopal', 'Jabalpur'],
+    'Maharashtra': ['Mumbai', 'Pune', 'Nagpur', 'Aurangabad'],
+    'Manipur': ['Imphal'],
+    'Meghalaya': ['Shillong'],
+    'Mizoram': ['Aizawl'],
+    'Nagaland': ['Kohima'],
+    'Odisha': ['Bhubaneswar', 'Cuttack', 'Rourkela'],
+    'Punjab': ['Chandigarh', 'Ludhiana', 'Amritsar'],
+    'Rajasthan': ['Jaipur', 'Jodhpur', 'Udaipur', 'Ajmer'],
+    'Sikkim': ['Gangtok'],
+    'Tamil Nadu': ['Chennai', 'Coimbatore', 'Madurai', 'Salem'],
+    'Telangana': ['Hyderabad', 'Secunderabad'],
+    'Tripura': ['Agartala'],
+    'Uttar Pradesh': ['Lucknow', 'Kanpur', 'Agra', 'Varanasi'],
+    'Uttarakhand': ['Dehradun', 'Nainital'],
+    'West Bengal': ['Kolkata', 'Darjeeling', 'Siliguri']
+  },
+  'United States': {
+    'California': ['Los Angeles', 'San Francisco', 'San Diego'],
+    'Texas': ['Houston', 'Dallas', 'Austin'],
+    'New York': ['New York City', 'Buffalo', 'Albany'],
+    'Florida': ['Miami', 'Orlando', 'Tampa']
+  },
+  'United Kingdom': {
+    'England': ['London', 'Manchester', 'Birmingham'],
+    'Scotland': ['Edinburgh', 'Glasgow'],
+    'Wales': ['Cardiff', 'Swansea']
+  }
+};
+
 const SupplierMaster = () => {
   const [user, setUser] = useState(null);
   const [suppliers, setSuppliers] = useState([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState(null);
   const [csvFile, setCsvFile] = useState(null);
+  const [countries] = useState(Object.keys(COUNTRY_STATE_CITY));
 
   const [formData, setFormData] = useState({
     supplier_id: '',
@@ -37,9 +90,10 @@ const SupplierMaster = () => {
     contact_person: '',
     email: '',
     phone: '',
-    address: '',
-    city: '',
+    country: '',
     state: '',
+    city: '',
+    address: '',
     pincode: '',
   });
 
@@ -78,7 +132,7 @@ const SupplierMaster = () => {
       complete: async (results) => {
         const rows = results.data;
 
-        const requiredHeaders = ['supplier_id', 'supplier_name', 'contact_person', 'email', 'phone'];
+        const requiredHeaders = ['supplier_id', 'supplier_name', 'contact_person', 'email', 'phone', 'country', 'state', 'city'];
         const fileHeaders = Object.keys(rows[0] || {});
         const missingHeaders = requiredHeaders.filter(h => !fileHeaders.includes(h));
 
@@ -95,9 +149,10 @@ const SupplierMaster = () => {
               contact_person: row.contact_person,
               email: row.email,
               phone: row.phone,
+              country: row.country,
+              state: row.state,
+              city: row.city,
               address: row.address || '',
-              city: row.city || '',
-              state: row.state || '',
               pincode: row.pincode || '',
             });
           }
@@ -122,9 +177,10 @@ const SupplierMaster = () => {
           contact_person: formData.contact_person,
           email: formData.email,
           phone: formData.phone,
-          address: formData.address,
-          city: formData.city,
+          country: formData.country,
           state: formData.state,
+          city: formData.city,
+          address: formData.address,
           pincode: formData.pincode,
         });
         toast.success('Supplier updated successfully');
@@ -166,9 +222,10 @@ const SupplierMaster = () => {
       contact_person: supplier.contact_person,
       email: supplier.email,
       phone: supplier.phone,
+      country: supplier.country,
+      state: supplier.state,
+      city: supplier.city,
       address: supplier.address || '',
-      city: supplier.city || '',
-      state: supplier.state || '',
       pincode: supplier.pincode || '',
     });
     setIsDialogOpen(true);
@@ -192,12 +249,24 @@ const SupplierMaster = () => {
       contact_person: '',
       email: '',
       phone: '',
-      address: '',
-      city: '',
+      country: '',
       state: '',
+      city: '',
+      address: '',
       pincode: '',
     });
     setEditingSupplier(null);
+  };
+
+  const getStates = () => {
+    return formData.country ? Object.keys(COUNTRY_STATE_CITY[formData.country]) : [];
+  };
+
+  const getCities = () => {
+    if (formData.country && formData.state) {
+      return COUNTRY_STATE_CITY[formData.country][formData.state] || [];
+    }
+    return [];
   };
 
   if (!user) return <div>Loading...</div>;
@@ -251,8 +320,9 @@ const SupplierMaster = () => {
                 <TableHead>Contact Person</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
-                <TableHead>City</TableHead>
+                <TableHead>Country</TableHead>
                 <TableHead>State</TableHead>
+                <TableHead>City</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -264,8 +334,9 @@ const SupplierMaster = () => {
                   <TableCell>{supplier.contact_person}</TableCell>
                   <TableCell>{supplier.email}</TableCell>
                   <TableCell>{supplier.phone}</TableCell>
-                  <TableCell>{supplier.city}</TableCell>
+                  <TableCell>{supplier.country}</TableCell>
                   <TableCell>{supplier.state}</TableCell>
+                  <TableCell>{supplier.city}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(supplier)}>
                       <Edit className="h-4 w-4" />
@@ -279,7 +350,7 @@ const SupplierMaster = () => {
 
               {suppliers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                     No suppliers found.
                   </TableCell>
                 </TableRow>
@@ -300,11 +371,15 @@ const SupplierMaster = () => {
             <form onSubmit={handleSubmit}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Supplier ID</Label>
+                  <Label>Supplier ID (Alphanumeric)</Label>
                   <Input
                     value={formData.supplier_id}
                     disabled={!!editingSupplier}
-                    onChange={e => setFormData({ ...formData, supplier_id: e.target.value })}
+                    onChange={e => {
+                      const value = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
+                      setFormData({ ...formData, supplier_id: value });
+                    }}
+                    placeholder="e.g., SUP001"
                     required
                   />
                 </div>
@@ -347,19 +422,68 @@ const SupplierMaster = () => {
                 </div>
 
                 <div>
-                  <Label>City</Label>
-                  <Input
-                    value={formData.city}
-                    onChange={e => setFormData({ ...formData, city: e.target.value })}
-                  />
+                  <Label>Country</Label>
+                  <Select
+                    value={formData.country}
+                    onValueChange={(value) => {
+                      setFormData({ ...formData, country: value, state: '', city: '' });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select country" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {countries.map((country) => (
+                        <SelectItem key={country} value={country}>
+                          {country}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
-                  <Label>State</Label>
-                  <Input
+                  <Label>State/Province</Label>
+                  <Select
                     value={formData.state}
-                    onChange={e => setFormData({ ...formData, state: e.target.value })}
-                  />
+                    onValueChange={(value) => {
+                      setFormData({ ...formData, state: value, city: '' });
+                    }}
+                    disabled={!formData.country}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getStates().map((state) => (
+                        <SelectItem key={state} value={state}>
+                          {state}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>City</Label>
+                  <Select
+                    value={formData.city}
+                    onValueChange={(value) => {
+                      setFormData({ ...formData, city: value });
+                    }}
+                    disabled={!formData.state}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select city" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getCities().map((city) => (
+                        <SelectItem key={city} value={city}>
+                          {city}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>

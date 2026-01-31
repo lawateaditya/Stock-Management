@@ -15,6 +15,7 @@ const InwardPage = () => {
   const [user, setUser] = useState(null);
   const [entries, setEntries] = useState([]);
   const [items, setItems] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [tempItems, setTempItems] = useState([]);
   const [editingIndex, setEditingIndex] = useState(null);
@@ -37,6 +38,7 @@ const InwardPage = () => {
     fetchUser();
     fetchEntries();
     fetchItems();
+    fetchSuppliers();
   }, []);
 
   const fetchUser = async () => {
@@ -63,6 +65,15 @@ const InwardPage = () => {
       setItems(response.data);
     } catch (error) {
       toast.error('Failed to fetch items');
+    }
+  };
+
+  const fetchSuppliers = async () => {
+    try {
+      const response = await api.get('/suppliers');
+      setSuppliers(response.data);
+    } catch (error) {
+      toast.error('Failed to fetch suppliers');
     }
   };
 
@@ -174,6 +185,7 @@ const InwardPage = () => {
                 <TableHead>Value</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead>Ref No</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -187,6 +199,35 @@ const InwardPage = () => {
                   <TableCell>{entry.inward_value.toFixed(2)}</TableCell>
                   <TableCell>{entry.supplier}</TableCell>
                   <TableCell>{entry.ref_no}</TableCell>
+                  <TableCell className="text-right">
+                    {(() => {
+                      if (!user) return null;
+                      const isSuperAdmin = user.role === 'super_admin';
+                      const isAdmin = user.role === 'admin';
+                      const canDelete = isSuperAdmin || isAdmin;
+                      if (!canDelete) return null;
+
+                      return (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={async () => {
+                            if (!window.confirm('Are you sure you want to delete this inward entry?')) return;
+                            try {
+                              await api.delete(`/inward/${entry.entry_id}`);
+                              toast.success('Inward entry deleted');
+                              fetchEntries();
+                            } catch (err) {
+                              toast.error(err.response?.data?.detail || 'Delete failed');
+                            }
+                          }}
+                          data-testid={`delete-inward-${entry.entry_id}`}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      );
+                    })()}
+                  </TableCell>
                 </TableRow>
               ))}
               {entries.length === 0 && (
@@ -291,13 +332,21 @@ const InwardPage = () => {
                   </div>
                   <div>
                     <Label htmlFor="supplier">Supplier</Label>
-                    <Input
-                      id="supplier"
-                      data-testid="inward-supplier-input"
+                    <Select
                       value={formData.supplier}
-                      onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                      required
-                    />
+                      onValueChange={(value) => setFormData({ ...formData, supplier: value })}
+                    >
+                      <SelectTrigger data-testid="inward-supplier-select">
+                        <SelectValue placeholder="Select supplier" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map((supplier) => (
+                          <SelectItem key={supplier.supplier_id} value={supplier.supplier_id}>
+                            {supplier.supplier_id} - {supplier.supplier_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label htmlFor="ref_no">Reference No</Label>
