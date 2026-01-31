@@ -97,6 +97,44 @@ class ItemMasterUpdate(BaseModel):
     uom: Optional[str] = None
     item_rate: Optional[float] = None
 
+class SupplierMaster(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    supplier_id: str
+    supplier_name: str
+    contact_person: str
+    email: str
+    phone: str
+    country: str
+    state: str
+    city: str
+    address: str
+    pincode: str
+    created_by: str
+    created_at: datetime
+
+class SupplierMasterCreate(BaseModel):
+    supplier_id: str
+    supplier_name: str
+    contact_person: str
+    email: str
+    phone: str
+    country: str
+    state: str
+    city: str
+    address: str
+    pincode: str
+
+class SupplierMasterUpdate(BaseModel):
+    supplier_name: Optional[str] = None
+    contact_person: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    country: Optional[str] = None
+    state: Optional[str] = None
+    city: Optional[str] = None
+    address: Optional[str] = None
+    pincode: Optional[str] = None
+
 class InwardEntry(BaseModel):
     model_config = ConfigDict(extra="ignore")
     entry_id: str
@@ -602,11 +640,89 @@ async def delete_item(
     
     return {"message": "Item deleted successfully"}
 
+# ==================== SUPPLIER MASTER ROUTES ====================
+
+@api_router.get("/suppliers", response_model=List[SupplierMaster])
+async def get_suppliers(
+    current_user: User = Depends(get_current_user)
+):
+    suppliers = await db.supplier_master.find({}, {"_id": 0}).to_list(1000)
+    for supplier in suppliers:
+        if isinstance(supplier['created_at'], str):
+            supplier['created_at'] = datetime.fromisoformat(supplier['created_at'])
+    return suppliers
+
+@api_router.post("/suppliers", response_model=SupplierMaster)
+async def create_supplier(
+    supplier_input: SupplierMasterCreate,
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.SUPER_ADMIN]))
+):
+    existing_supplier = await db.supplier_master.find_one({"supplier_id": supplier_input.supplier_id})
+    if existing_supplier:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Supplier ID already exists"
+        )
+    
+    supplier_doc = {
+        **supplier_input.model_dump(),
+        "created_by": current_user.user_id,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.supplier_master.insert_one(supplier_doc)
+    
+    supplier_doc_clean = await db.supplier_master.find_one({"supplier_id": supplier_input.supplier_id}, {"_id": 0})
+    supplier_doc_clean['created_at'] = datetime.fromisoformat(supplier_doc_clean['created_at'])
+    
+    return SupplierMaster(**supplier_doc_clean)
+
+@api_router.patch("/suppliers/{supplier_id}", response_model=SupplierMaster)
+async def update_supplier(
+    supplier_id: str,
+    supplier_update: SupplierMasterUpdate,
+    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.ADMIN]))
+):
+    supplier_doc = await db.supplier_master.find_one({"supplier_id": supplier_id}, {"_id": 0})
+    if not supplier_doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found"
+        )
+    
+    update_data = {k: v for k, v in supplier_update.model_dump().items() if v is not None}
+    
+    if update_data:
+        await db.supplier_master.update_one(
+            {"supplier_id": supplier_id},
+            {"$set": update_data}
+        )
+    
+    updated_supplier = await db.supplier_master.find_one({"supplier_id": supplier_id}, {"_id": 0})
+    updated_supplier['created_at'] = datetime.fromisoformat(updated_supplier['created_at'])
+    
+    return SupplierMaster(**updated_supplier)
+
+@api_router.delete("/suppliers/{supplier_id}")
+async def delete_supplier(
+    supplier_id: str,
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.SUPER_ADMIN]))
+):
+    result = await db.supplier_master.delete_one({"supplier_id": supplier_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Supplier not found"
+        )
+    
+    return {"message": "Supplier deleted successfully"}
+
 # ==================== INWARD ROUTES ====================
 
 @api_router.get("/inward", response_model=List[InwardEntry])
 async def get_inward_entries(
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.INWARD_USER, UserRole.SUPER_ADMIN]))
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.INWARD_USER, UserRole.ISSUER_USER, UserRole.SUPER_ADMIN]))
 ):
     query = {}
     if current_user.role == UserRole.INWARD_USER:
