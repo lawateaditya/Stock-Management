@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Package, TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
@@ -6,6 +7,7 @@ import api from '@/utils/api';
 import { toast } from 'sonner';
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [stats, setStats] = useState({
     totalItems: 0,
@@ -129,22 +131,34 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {user.role === 'admin' && (
-                <div className="p-4 border rounded-lg hover:shadow-md transition cursor-pointer" data-testid="quick-action-add-item">
+              {['admin', 'super_admin'].includes(user.role) && (
+                <div 
+                  className="p-4 border rounded-lg hover:shadow-md transition cursor-pointer" 
+                  data-testid="quick-action-add-item"
+                  onClick={() => navigate('/items')}
+                >
                   <Package className="h-8 w-8 text-blue-600 mb-2" />
                   <h3 className="font-semibold">Add New Item</h3>
                   <p className="text-sm text-gray-600">Create a new item in inventory</p>
                 </div>
               )}
-              {['admin', 'inward_user'].includes(user.role) && (
-                <div className="p-4 border rounded-lg hover:shadow-md transition cursor-pointer" data-testid="quick-action-inward">
+              {['admin', 'super_admin', 'inward_user'].includes(user.role) && (
+                <div 
+                  className="p-4 border rounded-lg hover:shadow-md transition cursor-pointer" 
+                  data-testid="quick-action-inward"
+                  onClick={() => navigate('/inward')}
+                >
                   <TrendingUp className="h-8 w-8 text-green-600 mb-2" />
                   <h3 className="font-semibold">Record Inward</h3>
                   <p className="text-sm text-gray-600">Add stock to inventory</p>
                 </div>
               )}
-              {['admin', 'issuer_user'].includes(user.role) && (
-                <div className="p-4 border rounded-lg hover:shadow-md transition cursor-pointer" data-testid="quick-action-issue">
+              {['admin', 'super_admin', 'issuer_user'].includes(user.role) && (
+                <div 
+                  className="p-4 border rounded-lg hover:shadow-md transition cursor-pointer" 
+                  data-testid="quick-action-issue"
+                  onClick={() => navigate('/issue')}
+                >
                   <TrendingDown className="h-8 w-8 text-red-600 mb-2" />
                   <h3 className="font-semibold">Issue Items</h3>
                   <p className="text-sm text-gray-600">Issue stock from inventory</p>

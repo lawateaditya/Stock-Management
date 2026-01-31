@@ -24,10 +24,10 @@ const Layout = ({ children, user }) => {
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: Home, roles: ['super_admin', 'admin', 'inward_user', 'issuer_user'] },
-    { path: '/items', label: 'Item Master', icon: Package, roles: ['admin'] },
-    { path: '/inward', label: 'Inward', icon: TrendingUp, roles: ['admin', 'inward_user'] },
-    { path: '/issue', label: 'Issue', icon: TrendingDown, roles: ['admin', 'issuer_user'] },
-    { path: '/stock', label: 'Stock Statement', icon: BarChart3, roles: ['admin'] },
+    { path: '/items', label: 'Item Master', icon: Package, roles: ['super_admin', 'admin'] },
+    { path: '/inward', label: 'Inward', icon: TrendingUp, roles: ['super_admin', 'admin', 'inward_user'] },
+    { path: '/issue', label: 'Issue', icon: TrendingDown, roles: ['super_admin', 'admin', 'issuer_user'] },
+    { path: '/stock', label: 'Stock Statement', icon: BarChart3, roles: ['super_admin', 'admin'] },
     { path: '/users', label: 'User Management', icon: Users, roles: ['super_admin', 'admin'] },
   ];
 

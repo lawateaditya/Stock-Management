@@ -539,7 +539,7 @@ async def get_items(
 @api_router.post("/items", response_model=ItemMaster)
 async def create_item(
     item_input: ItemMasterCreate,
-    current_user: User = Depends(require_role([UserRole.ADMIN]) or require_role([UserRole.SUPER_ADMIN]))
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.SUPER_ADMIN]))
 ):
     existing_item = await db.item_master.find_one({"item_code": item_input.item_code})
     if existing_item:
@@ -565,7 +565,7 @@ async def create_item(
 async def update_item(
     item_code: str,
     item_update: ItemMasterUpdate,
-    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN]))
+    current_user: User = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.ADMIN]))
 ):
     item_doc = await db.item_master.find_one({"item_code": item_code}, {"_id": 0})
     if not item_doc:
@@ -590,7 +590,7 @@ async def update_item(
 @api_router.delete("/items/{item_code}")
 async def delete_item(
     item_code: str,
-    current_user: User = Depends(require_role([UserRole.ADMIN]))
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.SUPER_ADMIN]))
 ):
     result = await db.item_master.delete_one({"item_code": item_code})
     
@@ -606,7 +606,7 @@ async def delete_item(
 
 @api_router.get("/inward", response_model=List[InwardEntry])
 async def get_inward_entries(
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.INWARD_USER]))
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.INWARD_USER, UserRole.SUPER_ADMIN]))
 ):
     query = {}
     if current_user.role == UserRole.INWARD_USER:
@@ -623,7 +623,7 @@ async def get_inward_entries(
 @api_router.post("/inward", response_model=InwardEntry)
 async def create_inward_entry(
     entry_input: InwardEntryCreate,
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.INWARD_USER]))
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.INWARD_USER, UserRole.SUPER_ADMIN]))
 ):
     # Verify item exists
     item_doc = await db.item_master.find_one({"item_code": entry_input.item_code}, {"_id": 0})
@@ -663,7 +663,7 @@ async def create_inward_entry(
 
 @api_router.get("/issue", response_model=List[IssueEntry])
 async def get_issue_entries(
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.ISSUER_USER]))
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.ISSUER_USER, UserRole.SUPER_ADMIN]))
 ):
     query = {}
     if current_user.role == UserRole.ISSUER_USER:
@@ -680,7 +680,7 @@ async def get_issue_entries(
 @api_router.post("/issue", response_model=IssueEntry)
 async def create_issue_entry(
     entry_input: IssueEntryCreate,
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.ISSUER_USER]))
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.ISSUER_USER, UserRole.SUPER_ADMIN]))
 ):
     # Verify item exists
     item_doc = await db.item_master.find_one({"item_code": entry_input.item_code}, {"_id": 0})
@@ -736,7 +736,7 @@ async def create_issue_entry(
 
 @api_router.get("/stock", response_model=List[StockStatement])
 async def get_stock_statement(
-    current_user: User = Depends(require_role([UserRole.ADMIN]))
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.SUPER_ADMIN]))
 ):
     # Get all items
     items = await db.item_master.find({}, {"_id": 0}).to_list(1000)

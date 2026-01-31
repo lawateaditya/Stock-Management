@@ -116,18 +116,39 @@ const ItemMaster = () => {
           item_rate: parseFloat(formData.item_rate),
         });
         toast.success('Item updated successfully');
+        setIsDialogOpen(false);
+        resetForm();
       } else {
         await api.post('/items', {
           ...formData,
           item_rate: parseFloat(formData.item_rate),
         });
         toast.success('Item created successfully');
+        resetForm();
       }
-      setIsDialogOpen(false);
+      fetchItems();
+    } catch (error) {
+      const errorMsg = typeof error.response?.data?.detail === 'string' 
+        ? error.response.data.detail 
+        : 'Operation failed';
+      toast.error(errorMsg);
+    }
+  };
+
+  const handleCreateAndAddMore = async () => {
+    try {
+      await api.post('/items', {
+        ...formData,
+        item_rate: parseFloat(formData.item_rate),
+      });
+      toast.success('Item created successfully');
       resetForm();
       fetchItems();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Operation failed');
+      const errorMsg = typeof error.response?.data?.detail === 'string' 
+        ? error.response.data.detail 
+        : 'Operation failed';
+      toast.error(errorMsg);
     }
   };
 
@@ -313,6 +334,16 @@ const ItemMaster = () => {
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
+                {!editingItem && (
+                  <Button 
+                    type="button"
+                    variant="secondary"
+                    onClick={handleCreateAndAddMore}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create & Add More
+                  </Button>
+                )}
                 <Button type="submit">
                   {editingItem ? 'Update' : 'Create'}
                 </Button>
