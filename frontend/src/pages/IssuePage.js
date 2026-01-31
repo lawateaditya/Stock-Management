@@ -15,6 +15,7 @@ const IssuePage = () => {
   const [user, setUser] = useState(null);
   const [entries, setEntries] = useState([]);
   const [items, setItems] = useState([]);
+  const [inwardEntries, setInwardEntries] = useState([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [tempItems, setTempItems] = useState([]);
   const [editingIndex, setEditingIndex] = useState(null);
@@ -25,7 +26,33 @@ const IssuePage = () => {
     issued_qty: '',
   });
 
-  const filteredItems = items.filter((item) =>
+  // Calculate available quantity for each item
+  const getAvailableQuantity = (itemCode) => {
+    const totalInward = inwardEntries
+      .filter(entry => entry.item_code === itemCode)
+      .reduce((sum, entry) => sum + entry.inward_qty, 0);
+
+    const totalIssued = entries
+      .filter(entry => entry.item_code === itemCode)
+      .reduce((sum, entry) => sum + entry.issued_qty, 0);
+
+    const tempIssued = tempItems
+      .filter(item => item.item_code === itemCode)
+      .reduce((sum, item) => sum + parseFloat(item.issued_qty || 0), 0);
+
+    return totalInward - totalIssued - tempIssued;
+  };
+
+  // Filter items to show only those with inward quantities
+  const getItemsWithInward = () => {
+    const itemsWithInward = items.filter(item => {
+      const available = getAvailableQuantity(item.item_code);
+      return available > 0;
+    });
+    return itemsWithInward;
+  };
+
+  const filteredItems = getItemsWithInward().filter((item) =>
     item.item_name.toLowerCase().includes(itemSearch.toLowerCase()) ||
     item.item_code.toLowerCase().includes(itemSearch.toLowerCase())
   );
@@ -34,6 +61,7 @@ const IssuePage = () => {
     fetchUser();
     fetchEntries();
     fetchItems();
+    fetchInwardEntries();
   }, []);
 
   const fetchUser = async () => {
@@ -60,6 +88,15 @@ const IssuePage = () => {
       setItems(response.data);
     } catch (error) {
       toast.error('Failed to fetch items');
+    }
+  };
+
+  const fetchInwardEntries = async () => {
+    try {
+      const response = await api.get('/inward');
+      setInwardEntries(response.data);
+    } catch (error) {
+      toast.error('Failed to fetch inward entries');
     }
   };
 
@@ -96,6 +133,14 @@ const IssuePage = () => {
     e.preventDefault();
     if (!formData.item_code || !formData.issued_qty) {
       toast.error('Please fill all fields');
+      return;
+    }
+
+    const available = getAvailableQuantity(formData.item_code);
+    const requestedQty = parseFloat(formData.issued_qty);
+
+    if (requestedQty > available) {
+      toast.error(`Cannot issue ${requestedQty} units. Available quantity: ${available.toFixed(2)} units`);
       return;
     }
 
@@ -259,6 +304,11 @@ const IssuePage = () => {
                       onChange={(e) => setFormData({ ...formData, issued_qty: e.target.value })}
                       required
                     />
+                    {formData.item_code && (
+                      <p className="text-xs mt-1 text-gray-600">
+                        Available: {getAvailableQuantity(formData.item_code).toFixed(2)} units
+                      </p>
+                    )}
                   </div>
                 </div>
 

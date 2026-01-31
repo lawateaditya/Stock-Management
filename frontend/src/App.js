@@ -5,6 +5,7 @@ import LoginPage from '@/pages/LoginPage';
 import AuthCallback from '@/pages/AuthCallback';
 import Dashboard from '@/pages/Dashboard';
 import ItemMaster from '@/pages/ItemMaster';
+import SupplierMaster from '@/pages/SupplierMaster';
 import InwardPage from '@/pages/InwardPage';
 import IssuePage from '@/pages/IssuePage';
 import StockPage from '@/pages/StockPage';
@@ -25,6 +26,7 @@ function AppRouter() {
       <Route path="/" element={<LoginPage />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/items" element={<ProtectedRoute><ItemMaster /></ProtectedRoute>} />
+      <Route path="/suppliers" element={<ProtectedRoute><SupplierMaster /></ProtectedRoute>} />
       <Route path="/inward" element={<ProtectedRoute allowedRoles={['super_admin', 'inward_user']}><InwardPage /></ProtectedRoute>} />
       <Route path="/issue" element={<ProtectedRoute allowedRoles={['super_admin', 'issuer_user']}><IssuePage /></ProtectedRoute>} />
       <Route path="/stock" element={<ProtectedRoute allowedRoles={['super_admin']}><StockPage /></ProtectedRoute>} />

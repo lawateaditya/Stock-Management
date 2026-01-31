@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, LogOut, Package, TrendingUp, TrendingDown, BarChart3, Users, Home } from 'lucide-react';
+import { Menu, X, LogOut, Package, TrendingUp, TrendingDown, BarChart3, Users, Home, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import api from '@/utils/api';
 import { toast } from 'sonner';
@@ -25,6 +25,7 @@ const Layout = ({ children, user }) => {
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: Home, roles: ['super_admin', 'admin', 'inward_user', 'issuer_user'] },
     { path: '/items', label: 'Item Master', icon: Package, roles: ['super_admin', 'admin'] },
+    { path: '/suppliers', label: 'Supplier Master', icon: Truck, roles: ['super_admin', 'admin'] },
     { path: '/inward', label: 'Inward', icon: TrendingUp, roles: ['super_admin', 'admin', 'inward_user'] },
     { path: '/issue', label: 'Issue', icon: TrendingDown, roles: ['super_admin', 'admin', 'issuer_user'] },
     { path: '/stock', label: 'Stock Statement', icon: BarChart3, roles: ['super_admin', 'admin'] },
