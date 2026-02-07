@@ -122,17 +122,25 @@ const StockPage = () => {
 
   /** Build flat rows for export (summary only, no transaction details). Includes Start Date & End Date from filters (DD/MM/YYYY). */
   const getExportRows = () =>
-    stockData.map((s) => ({
-      'Start Date': toDDMMYYYY(fromDate),
-      'End Date': toDDMMYYYY(toDate),
-      'Item Code': s.item_code,
-      'Item Name': s.item_description || s.item_code,
-      'Opening Stock': Number(s.opening_stk),
-      'Inward Qty': Number(s.inward_qty),
-      'Issue Qty': Number(s.issue_qty),
-      Rate: s.rate != null ? Number(s.rate) : '',
-      'Closing Stock': Number(s.closing_stk),
-    }));
+    stockData.map((s) => {
+      const rate = s.rate != null ? Number(s.rate) : 0;
+      const openingStk = Number(s.opening_stk);
+      const closingStk = Number(s.closing_stk);
+      return {
+        'Start Date': toDDMMYYYY(fromDate),
+        'End Date': toDDMMYYYY(toDate),
+        'Item Code': s.item_code,
+        'Item Name': s.item_description || s.item_code,
+        'Opening Stock': openingStk,
+        'Inward Qty': Number(s.inward_qty),
+        'Inward Rate': rate || '',
+        'Issue Qty': Number(s.issue_qty),
+        Rate: rate || '',
+        'Opening Valuation': Number((rate * openingStk).toFixed(2)),
+        'Closing Stock': closingStk,
+        'Closing Valuation': Number((rate * closingStk).toFixed(2)),
+      };
+    });
 
   const handleDownloadCSV = () => {
     if (!stockData.length) {
@@ -348,6 +356,9 @@ const StockPage = () => {
                                           <TableHead className="text-right">
                                             Quantity
                                           </TableHead>
+                                          <TableHead className="text-right">
+                                            Inward Rate
+                                          </TableHead>
                                           <TableHead>
                                             Supplier / Reference
                                           </TableHead>
@@ -361,6 +372,9 @@ const StockPage = () => {
                                             </TableCell>
                                             <TableCell className="text-right">
                                               {Number(it.inward_qty).toFixed(2)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                              {it.inward_rate != null ? Number(it.inward_rate).toFixed(2) : '—'}
                                             </TableCell>
                                             <TableCell>
                                               {suppliers.find(s => s.id === it.supplier)?.supplier_name || it.supplier || it.ref_no || '—'}
