@@ -722,12 +722,39 @@ async def delete_supplier(
 
 @api_router.get("/inward", response_model=List[InwardEntry])
 async def get_inward_entries(
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
     current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.INWARD_USER, UserRole.ISSUER_USER, UserRole.SUPER_ADMIN]))
 ):
     query = {}
     if current_user.role == UserRole.INWARD_USER:
         query["created_by"] = current_user.user_id
-    
+
+    # If date filters provided, parse and add to query
+    if from_date and to_date:
+        try:
+            try:
+                frm = datetime.fromisoformat(from_date)
+            except ValueError:
+                frm = datetime.strptime(from_date, "%Y-%m-%d")
+
+            try:
+                to = datetime.fromisoformat(to_date)
+            except ValueError:
+                to = datetime.strptime(to_date, "%Y-%m-%d")
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date format. Use ISO or YYYY-MM-DD")
+
+        if frm.tzinfo is None:
+            frm = frm.replace(tzinfo=timezone.utc)
+        if to.tzinfo is None:
+            to = to.replace(tzinfo=timezone.utc)
+
+        if to.hour == 0 and to.minute == 0 and to.second == 0 and to.microsecond == 0:
+            to = to + timedelta(hours=23, minutes=59, seconds=59, microseconds=999999)
+
+        query["date"] = {"$gte": frm.isoformat(), "$lte": to.isoformat()}
+
     entries = await db.tbl_inward.find(query, {"_id": 0}).to_list(1000)
     for entry in entries:
         if isinstance(entry['date'], str):
@@ -809,12 +836,39 @@ async def delete_inward_entry(
 
 @api_router.get("/issue", response_model=List[IssueEntry])
 async def get_issue_entries(
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
     current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.ISSUER_USER, UserRole.SUPER_ADMIN]))
 ):
     query = {}
     if current_user.role == UserRole.ISSUER_USER:
-        query["created_by"] = current_user.user_id
-    
+        query["created_by"] = current_user.name
+
+    # If date filters provided, parse and add to query
+    if from_date and to_date:
+        try:
+            try:
+                frm = datetime.fromisoformat(from_date)
+            except ValueError:
+                frm = datetime.strptime(from_date, "%Y-%m-%d")
+
+            try:
+                to = datetime.fromisoformat(to_date)
+            except ValueError:
+                to = datetime.strptime(to_date, "%Y-%m-%d")
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date format. Use ISO or YYYY-MM-DD")
+
+        if frm.tzinfo is None:
+            frm = frm.replace(tzinfo=timezone.utc)
+        if to.tzinfo is None:
+            to = to.replace(tzinfo=timezone.utc)
+
+        if to.hour == 0 and to.minute == 0 and to.second == 0 and to.microsecond == 0:
+            to = to + timedelta(hours=23, minutes=59, seconds=59, microseconds=999999)
+
+        query["date"] = {"$gte": frm.isoformat(), "$lte": to.isoformat()}
+
     entries = await db.tbl_issue.find(query, {"_id": 0}).to_list(1000)
     for entry in entries:
         if isinstance(entry['date'], str):
@@ -908,42 +962,92 @@ async def delete_issue_entry(
 
 @api_router.get("/stock", response_model=List[StockStatement])
 async def get_stock_statement(
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
     current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.SUPER_ADMIN]))
 ):
+    # Require both dates; if absent, return empty list so frontend shows filters
+    if not from_date or not to_date:
+        return []
+
+    # Parse dates (accept ISO or YYYY-MM-DD)
+    try:
+        try:
+            frm = datetime.fromisoformat(from_date)
+        except ValueError:
+            frm = datetime.strptime(from_date, "%Y-%m-%d")
+
+        try:
+            to = datetime.fromisoformat(to_date)
+        except ValueError:
+            to = datetime.strptime(to_date, "%Y-%m-%d")
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date format. Use ISO or YYYY-MM-DD")
+
+    # Normalize to UTC if naive
+    if frm.tzinfo is None:
+        frm = frm.replace(tzinfo=timezone.utc)
+    if to.tzinfo is None:
+        to = to.replace(tzinfo=timezone.utc)
+
+    # If `to` is date-only at midnight, expand to end of day
+    if to.hour == 0 and to.minute == 0 and to.second == 0 and to.microsecond == 0:
+        to = to + timedelta(hours=23, minutes=59, seconds=59, microseconds=999999)
+
+    from_iso = frm.isoformat()
+    to_iso = to.isoformat()
+
     # Get all items
     items = await db.item_master.find({}, {"_id": 0}).to_list(1000)
-    
     stock_list = []
-    
+
     for item in items:
         item_code = item["item_code"]
-        
-        # Calculate total inward
+
+        # Total inward in range
         inward_pipeline = [
-            {"$match": {"item_code": item_code}},
+            {"$match": {"item_code": item_code, "date": {"$gte": from_iso, "$lte": to_iso}}},
             {"$group": {"_id": None, "total": {"$sum": "$inward_qty"}}}
         ]
         inward_result = await db.tbl_inward.aggregate(inward_pipeline).to_list(1)
         total_inward = inward_result[0]["total"] if inward_result else 0
-        
-        # Calculate total issued
+
+        # Total issued in range
         issue_pipeline = [
-            {"$match": {"item_code": item_code}},
+            {"$match": {"item_code": item_code, "date": {"$gte": from_iso, "$lte": to_iso}}},
             {"$group": {"_id": None, "total": {"$sum": "$issued_qty"}}}
         ]
         issue_result = await db.tbl_issue.aggregate(issue_pipeline).to_list(1)
         total_issued = issue_result[0]["total"] if issue_result else 0
-        
+
+        # Opening stock before from_date
+        opening_inward_pipeline = [
+            {"$match": {"item_code": item_code, "date": {"$lt": from_iso}}},
+            {"$group": {"_id": None, "total": {"$sum": "$inward_qty"}}}
+        ]
+        opening_inward_result = await db.tbl_inward.aggregate(opening_inward_pipeline).to_list(1)
+        opening_inward = opening_inward_result[0]["total"] if opening_inward_result else 0
+
+        opening_issue_pipeline = [
+            {"$match": {"item_code": item_code, "date": {"$lt": from_iso}}},
+            {"$group": {"_id": None, "total": {"$sum": "$issued_qty"}}}
+        ]
+        opening_issue_result = await db.tbl_issue.aggregate(opening_issue_pipeline).to_list(1)
+        opening_issued = opening_issue_result[0]["total"] if opening_issue_result else 0
+
+        opening_stk = opening_inward - opening_issued
+        closing_stk = opening_stk + total_inward - total_issued
+
         stock_list.append(StockStatement(
             item_code=item_code,
-            item_description=item["item_name"],
-            category=item["category"],
-            opening_stk=0,  # You can implement opening stock logic if needed
+            item_description=item.get("item_name", ""),
+            category=item.get("category", ""),
+            opening_stk=opening_stk,
             inward_qty=total_inward,
             issue_qty=total_issued,
-            closing_stk=total_inward - total_issued
+            closing_stk=closing_stk
         ))
-    
+
     return stock_list
 
 # Include the router in the main app
