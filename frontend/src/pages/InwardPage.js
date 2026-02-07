@@ -197,7 +197,7 @@ const InwardPage = () => {
                   <TableCell>{entry.inward_qty}</TableCell>
                   <TableCell>{entry.inward_rate.toFixed(2)}</TableCell>
                   <TableCell>{entry.inward_value.toFixed(2)}</TableCell>
-                  <TableCell>{entry.supplier}</TableCell>
+                  <TableCell>{suppliers.find(s => s.id === entry.supplier)?.supplier_name || entry.supplier}</TableCell>
                   <TableCell>{entry.ref_no}</TableCell>
                   <TableCell className="text-right">
                     {(() => {
@@ -342,8 +342,8 @@ const InwardPage = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {suppliers.map((supplier) => (
-                          <SelectItem key={supplier.supplier_id} value={supplier.supplier_id}>
-                            {supplier.supplier_id} - {supplier.supplier_name}
+                          <SelectItem key={supplier.id} value={supplier.id}>
+                            {supplier.supplier_name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -405,7 +405,7 @@ const InwardPage = () => {
                             <TableCell>{item.item_code}</TableCell>
                             <TableCell>{item.inward_qty}</TableCell>
                             <TableCell>{parseFloat(item.inward_rate).toFixed(2)}</TableCell>
-                            <TableCell>{item.supplier}</TableCell>
+                            <TableCell>{suppliers.find(s => s.id === item.supplier)?.supplier_name || item.supplier}</TableCell>
                             <TableCell>{item.ref_no}</TableCell>
                             <TableCell>
                               <div className="flex gap-2">

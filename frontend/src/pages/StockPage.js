@@ -29,11 +29,13 @@ const StockPage = () => {
   const [loading, setLoading] = useState(false);
   const [inwardEntries, setInwardEntries] = useState([]);
   const [issueEntries, setIssueEntries] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   /** Item code of the row currently expanded; null when none */
   const [expandedItemCode, setExpandedItemCode] = useState(null);
 
   useEffect(() => {
     fetchUser();
+    api.get('/suppliers').then((r) => setSuppliers(r.data || [])).catch(() => {});
   }, []);
 
   const fetchUser = async () => {
@@ -114,9 +116,11 @@ const StockPage = () => {
     setExpandedItemCode((prev) => (prev === itemCode ? null : itemCode));
   };
 
-  /** Build flat rows for export (summary only, no transaction details) */
+  /** Build flat rows for export (summary only, no transaction details). Includes Start Date & End Date from filters. */
   const getExportRows = () =>
     stockData.map((s) => ({
+      'Start Date': fromDate,
+      'End Date': toDate,
       'Item Code': s.item_code,
       'Item Name': s.item_description || s.item_code,
       'Opening Stock': Number(s.opening_stk),
@@ -357,7 +361,7 @@ const StockPage = () => {
                                               {Number(it.inward_qty).toFixed(2)}
                                             </TableCell>
                                             <TableCell>
-                                              {it.supplier || it.ref_no || '—'}
+                                              {suppliers.find(s => s.id === it.supplier)?.supplier_name || it.supplier || it.ref_no || '—'}
                                             </TableCell>
                                           </TableRow>
                                         ))}

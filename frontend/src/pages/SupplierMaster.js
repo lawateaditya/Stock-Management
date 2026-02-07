@@ -85,7 +85,6 @@ const SupplierMaster = () => {
   const [countries] = useState(Object.keys(COUNTRY_STATE_CITY));
 
   const [formData, setFormData] = useState({
-    supplier_id: '',
     supplier_name: '',
     contact_person: '',
     email: '',
@@ -132,7 +131,7 @@ const SupplierMaster = () => {
       complete: async (results) => {
         const rows = results.data;
 
-        const requiredHeaders = ['supplier_id', 'supplier_name', 'contact_person', 'email', 'phone', 'country', 'state', 'city'];
+        const requiredHeaders = ['supplier_name', 'contact_person', 'email', 'phone', 'country', 'state', 'city'];
         const fileHeaders = Object.keys(rows[0] || {});
         const missingHeaders = requiredHeaders.filter(h => !fileHeaders.includes(h));
 
@@ -144,7 +143,6 @@ const SupplierMaster = () => {
         try {
           for (const row of rows) {
             await api.post('/suppliers', {
-              supplier_id: row.supplier_id,
               supplier_name: row.supplier_name,
               contact_person: row.contact_person,
               email: row.email,
@@ -172,7 +170,7 @@ const SupplierMaster = () => {
     e.preventDefault();
     try {
       if (editingSupplier) {
-        await api.patch(`/suppliers/${editingSupplier.supplier_id}`, {
+        await api.patch(`/suppliers/${editingSupplier.id}`, {
           supplier_name: formData.supplier_name,
           contact_person: formData.contact_person,
           email: formData.email,
@@ -217,7 +215,6 @@ const SupplierMaster = () => {
   const handleEdit = (supplier) => {
     setEditingSupplier(supplier);
     setFormData({
-      supplier_id: supplier.supplier_id,
       supplier_name: supplier.supplier_name,
       contact_person: supplier.contact_person,
       email: supplier.email,
@@ -231,10 +228,10 @@ const SupplierMaster = () => {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = async (supplier_id) => {
+  const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this supplier?')) return;
     try {
-      await api.delete(`/suppliers/${supplier_id}`);
+      await api.delete(`/suppliers/${id}`);
       toast.success('Supplier deleted successfully');
       fetchSuppliers();
     } catch (error) {
@@ -244,7 +241,6 @@ const SupplierMaster = () => {
 
   const resetForm = () => {
     setFormData({
-      supplier_id: '',
       supplier_name: '',
       contact_person: '',
       email: '',
@@ -315,7 +311,6 @@ const SupplierMaster = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Supplier ID</TableHead>
                 <TableHead>Supplier Name</TableHead>
                 <TableHead>Contact Person</TableHead>
                 <TableHead>Email</TableHead>
@@ -328,8 +323,7 @@ const SupplierMaster = () => {
             </TableHeader>
             <TableBody>
               {suppliers.map(supplier => (
-                <TableRow key={supplier.supplier_id}>
-                  <TableCell>{supplier.supplier_id}</TableCell>
+                <TableRow key={supplier.id}>
                   <TableCell>{supplier.supplier_name}</TableCell>
                   <TableCell>{supplier.contact_person}</TableCell>
                   <TableCell>{supplier.email}</TableCell>
@@ -341,7 +335,7 @@ const SupplierMaster = () => {
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(supplier)}>
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(supplier.supplier_id)}>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(supplier.id)}>
                       <Trash2 className="h-4 w-4 text-red-600" />
                     </Button>
                   </TableCell>
@@ -350,7 +344,7 @@ const SupplierMaster = () => {
 
               {suppliers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                     No suppliers found.
                   </TableCell>
                 </TableRow>
@@ -370,20 +364,6 @@ const SupplierMaster = () => {
 
             <form onSubmit={handleSubmit}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Supplier ID (Alphanumeric)</Label>
-                  <Input
-                    value={formData.supplier_id}
-                    disabled={!!editingSupplier}
-                    onChange={e => {
-                      const value = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
-                      setFormData({ ...formData, supplier_id: value });
-                    }}
-                    placeholder="e.g., SUP001"
-                    required
-                  />
-                </div>
-
                 <div>
                   <Label>Supplier Name</Label>
                   <Input

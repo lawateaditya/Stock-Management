@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Response, Request
+from bson import ObjectId
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -99,7 +100,7 @@ class ItemMasterUpdate(BaseModel):
 
 class SupplierMaster(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    supplier_id: str
+    id: str
     supplier_name: str
     contact_person: str
     email: str
@@ -113,7 +114,6 @@ class SupplierMaster(BaseModel):
     created_at: datetime
 
 class SupplierMasterCreate(BaseModel):
-    supplier_id: str
     supplier_name: str
     contact_person: str
     email: str
@@ -649,44 +649,46 @@ async def delete_item(
 async def get_suppliers(
     current_user: User = Depends(get_current_user)
 ):
-    suppliers = await db.supplier_master.find({}, {"_id": 0}).to_list(1000)
+    suppliers = await db.supplier_master.find({}).to_list(1000)
+    result = []
     for supplier in suppliers:
-        if isinstance(supplier['created_at'], str):
-            supplier['created_at'] = datetime.fromisoformat(supplier['created_at'])
-    return suppliers
+        s = {k: v for k, v in supplier.items() if k != "_id"}
+        s["id"] = str(supplier["_id"])
+        if isinstance(s.get("created_at"), str):
+            s["created_at"] = datetime.fromisoformat(s["created_at"])
+        result.append(s)
+    return result
 
 @api_router.post("/suppliers", response_model=SupplierMaster)
 async def create_supplier(
     supplier_input: SupplierMasterCreate,
     current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.SUPER_ADMIN]))
 ):
-    existing_supplier = await db.supplier_master.find_one({"supplier_id": supplier_input.supplier_id})
-    if existing_supplier:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Supplier ID already exists"
-        )
-    
     supplier_doc = {
         **supplier_input.model_dump(),
         "created_by": current_user.user_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
-    await db.supplier_master.insert_one(supplier_doc)
+    result = await db.supplier_master.insert_one(supplier_doc)
+    created = await db.supplier_master.find_one({"_id": result.inserted_id})
+    created_clean = {k: v for k, v in created.items() if k != "_id"}
+    created_clean["id"] = str(created["_id"])
+    created_clean["created_at"] = datetime.fromisoformat(created_clean["created_at"])
     
-    supplier_doc_clean = await db.supplier_master.find_one({"supplier_id": supplier_input.supplier_id}, {"_id": 0})
-    supplier_doc_clean['created_at'] = datetime.fromisoformat(supplier_doc_clean['created_at'])
-    
-    return SupplierMaster(**supplier_doc_clean)
+    return SupplierMaster(**created_clean)
 
-@api_router.patch("/suppliers/{supplier_id}", response_model=SupplierMaster)
+@api_router.patch("/suppliers/{id}", response_model=SupplierMaster)
 async def update_supplier(
-    supplier_id: str,
+    id: str,
     supplier_update: SupplierMasterUpdate,
     current_user: User = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.ADMIN]))
 ):
-    supplier_doc = await db.supplier_master.find_one({"supplier_id": supplier_id}, {"_id": 0})
+    try:
+        oid = ObjectId(id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid supplier id")
+    supplier_doc = await db.supplier_master.find_one({"_id": oid})
     if not supplier_doc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -697,21 +699,27 @@ async def update_supplier(
     
     if update_data:
         await db.supplier_master.update_one(
-            {"supplier_id": supplier_id},
+            {"_id": oid},
             {"$set": update_data}
         )
     
-    updated_supplier = await db.supplier_master.find_one({"supplier_id": supplier_id}, {"_id": 0})
-    updated_supplier['created_at'] = datetime.fromisoformat(updated_supplier['created_at'])
+    updated_supplier = await db.supplier_master.find_one({"_id": oid})
+    updated_clean = {k: v for k, v in updated_supplier.items() if k != "_id"}
+    updated_clean["id"] = str(updated_supplier["_id"])
+    updated_clean["created_at"] = datetime.fromisoformat(updated_clean["created_at"])
     
-    return SupplierMaster(**updated_supplier)
+    return SupplierMaster(**updated_clean)
 
-@api_router.delete("/suppliers/{supplier_id}")
+@api_router.delete("/suppliers/{id}")
 async def delete_supplier(
-    supplier_id: str,
+    id: str,
     current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.SUPER_ADMIN]))
 ):
-    result = await db.supplier_master.delete_one({"supplier_id": supplier_id})
+    try:
+        oid = ObjectId(id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid supplier id")
+    result = await db.supplier_master.delete_one({"_id": oid})
     
     if result.deleted_count == 0:
         raise HTTPException(
@@ -798,6 +806,12 @@ async def create_inward_entry(
     }
     
     await db.tbl_inward.insert_one(entry_doc)
+
+    # Update item master rate to this inward's rate
+    await db.item_master.update_one(
+        {"item_code": entry_input.item_code},
+        {"$set": {"item_rate": entry_input.inward_rate}}
+    )
     
     entry_doc_clean = await db.tbl_inward.find_one({"entry_id": entry_id}, {"_id": 0})
     entry_doc_clean['date'] = datetime.fromisoformat(entry_doc_clean['date'])
