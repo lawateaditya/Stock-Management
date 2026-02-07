@@ -268,6 +268,7 @@ const InwardPage = () => {
                       value={formData.date}
                       onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                       required
+                      // {format(new Date(entry.date), 'dd/MM/yyyy')}
                     />
                   </div>
                   <div>

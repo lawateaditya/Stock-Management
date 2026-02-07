@@ -164,7 +164,8 @@ class IssueEntry(BaseModel):
     item_code: str
     item_description: str
     issued_qty: float
-    created_by: str
+    created_by: str  # user_id stored in DB
+    created_by_name: Optional[str] = None  # resolved from users collection for display
     created_at: datetime
 
 class IssueEntryCreate(BaseModel):
@@ -179,6 +180,8 @@ class StockStatement(BaseModel):
     opening_stk: float
     inward_qty: float
     issue_qty: float
+    rate: float
+    quantity: float  # closing balance quantity
     closing_stk: float
 
 class SessionData(BaseModel):
@@ -842,7 +845,7 @@ async def get_issue_entries(
 ):
     query = {}
     if current_user.role == UserRole.ISSUER_USER:
-        query["created_by"] = current_user.name
+        query["created_by"] = current_user.user_id
 
     # If date filters provided, parse and add to query
     if from_date and to_date:
@@ -870,11 +873,21 @@ async def get_issue_entries(
         query["date"] = {"$gte": frm.isoformat(), "$lte": to.isoformat()}
 
     entries = await db.tbl_issue.find(query, {"_id": 0}).to_list(1000)
+    # Resolve created_by (user_id) to user name from users collection
+    user_ids = list({e["created_by"] for e in entries})
+    user_id_to_name = {}
+    if user_ids:
+        users_cursor = db.users.find({"user_id": {"$in": user_ids}}, {"user_id": 1, "name": 1})
+        async for u in users_cursor:
+            user_id_to_name[u["user_id"]] = u.get("name", u["user_id"])
+
     for entry in entries:
-        if isinstance(entry['date'], str):
-            entry['date'] = datetime.fromisoformat(entry['date'])
-        if isinstance(entry['created_at'], str):
-            entry['created_at'] = datetime.fromisoformat(entry['created_at'])
+        if isinstance(entry["date"], str):
+            entry["date"] = datetime.fromisoformat(entry["date"])
+        if isinstance(entry["created_at"], str):
+            entry["created_at"] = datetime.fromisoformat(entry["created_at"])
+        entry["created_by_name"] = user_id_to_name.get(entry["created_by"], entry["created_by"])
+
     return entries
 
 @api_router.post("/issue", response_model=IssueEntry)
@@ -929,7 +942,8 @@ async def create_issue_entry(
     entry_doc_clean = await db.tbl_issue.find_one({"entry_id": entry_id}, {"_id": 0})
     entry_doc_clean['date'] = datetime.fromisoformat(entry_doc_clean['date'])
     entry_doc_clean['created_at'] = datetime.fromisoformat(entry_doc_clean['created_at'])
-    
+    entry_doc_clean['created_by_name'] = current_user.name
+
     return IssueEntry(**entry_doc_clean)
 
 @api_router.delete("/issue/{entry_id}")
@@ -959,6 +973,10 @@ async def delete_issue_entry(
     return {"message": "Issue entry deleted successfully"}
 
 # ==================== STOCK STATEMENT ROUTES ====================
+# Item-wise stock statement: one row per item.
+# - Opening Stock = Total Inward − Total Issue before From Date (excludes From–To range).
+# - Inward Qty / Issue Qty = sum of transactions between From and To (inclusive).
+# - Closing Stock = Opening + Inward Qty − Issue Qty (always consistent with summary).
 
 @api_router.get("/stock", response_model=List[StockStatement])
 async def get_stock_statement(
@@ -1037,6 +1055,7 @@ async def get_stock_statement(
 
         opening_stk = opening_inward - opening_issued
         closing_stk = opening_stk + total_inward - total_issued
+        item_rate = float(item.get("item_rate", 0))
 
         stock_list.append(StockStatement(
             item_code=item_code,
@@ -1045,6 +1064,8 @@ async def get_stock_statement(
             opening_stk=opening_stk,
             inward_qty=total_inward,
             issue_qty=total_issued,
+            rate=item_rate,
+            quantity=closing_stk,
             closing_stk=closing_stk
         ))
 

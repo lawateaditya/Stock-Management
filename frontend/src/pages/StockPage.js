@@ -1,11 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import api from '@/utils/api';
 import { toast } from 'sonner';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
+/**
+ * Item-wise Stock Statement module.
+ * Fetches stock summary and transactions by date range; each item row can expand
+ * to show its inward and issue entries (filtered by item and date range).
+ */
 const StockPage = () => {
   const [user, setUser] = useState(null);
   const [stockData, setStockData] = useState([]);
@@ -14,6 +27,8 @@ const StockPage = () => {
   const [loading, setLoading] = useState(false);
   const [inwardEntries, setInwardEntries] = useState([]);
   const [issueEntries, setIssueEntries] = useState([]);
+  /** Item code of the row currently expanded; null when none */
+  const [expandedItemCode, setExpandedItemCode] = useState(null);
 
   useEffect(() => {
     fetchUser();
@@ -28,28 +43,38 @@ const StockPage = () => {
     }
   };
 
+  /**
+   * Fetches stock statement and all transactions for the selected date range.
+   * Stock summary: one row per item (Opening, Inward, Issue, Rate, Closing).
+   * Inward/Issue lists are used to show item-wise details on expand.
+   */
   const fetchStock = async () => {
     if (!fromDate || !toDate) {
       setStockData([]);
       setInwardEntries([]);
       setIssueEntries([]);
+      setExpandedItemCode(null);
       return;
     }
 
     setLoading(true);
+    setExpandedItemCode(null);
     try {
       const [stockResp, inwardResp, issueResp] = await Promise.all([
-        api.get(`/stock?from=${fromDate}&to=${toDate}`),
-        api.get(`/inward?from=${fromDate}&to=${toDate}`),
-        api.get(`/issue?from=${fromDate}&to=${toDate}`)
+        api.get(`/stock?from_date=${encodeURIComponent(fromDate)}&to_date=${encodeURIComponent(toDate)}`),
+        api.get(`/inward?from_date=${encodeURIComponent(fromDate)}&to_date=${encodeURIComponent(toDate)}`),
+        api.get(`/issue?from_date=${encodeURIComponent(fromDate)}&to_date=${encodeURIComponent(toDate)}`),
       ]);
 
       setStockData(stockResp.data || []);
       setInwardEntries(inwardResp.data || []);
       setIssueEntries(issueResp.data || []);
-
     } catch (error) {
-      toast.error('Failed to fetch stock statement or transactions');
+      const message =
+        error.response?.data?.detail ||
+        error.message ||
+        'Failed to fetch stock statement or transactions';
+      toast.error(typeof message === 'string' ? message : JSON.stringify(message));
       setStockData([]);
       setInwardEntries([]);
       setIssueEntries([]);
@@ -72,40 +97,60 @@ const StockPage = () => {
     setStockData([]);
     setInwardEntries([]);
     setIssueEntries([]);
+    setExpandedItemCode(null);
   };
 
-  if (!user) return <div>Loading...</div>;
+  /** Inward entries for a given item (already filtered by date range from API) */
+  const getInwardForItem = (itemCode) =>
+    inwardEntries.filter((e) => e.item_code === itemCode);
+
+  /** Issue entries for a given item (already filtered by date range from API) */
+  const getIssueForItem = (itemCode) =>
+    issueEntries.filter((e) => e.item_code === itemCode);
+
+  const toggleExpand = (itemCode) => {
+    setExpandedItemCode((prev) => (prev === itemCode ? null : itemCode));
+  };
+
+  if (!user) return <div className="p-4">Loading...</div>;
 
   return (
     <Layout user={user}>
-      <div className="space-y-6" data-testid="stock-page">
+      <div className="space-y-6 p-4 md:p-6" data-testid="stock-page">
         <div>
-          <h2 className="text-2xl font-bold">Stock Statement</h2>
-          <p className="text-gray-600">View current inventory stock levels</p>
+          <h2 className="text-2xl font-bold">Item-wise Stock Statement</h2>
+          <p className="text-gray-600">
+            View stock summary and transaction details by item and date range.
+          </p>
         </div>
 
+        {/* Filters: From Date, To Date, Fetch, Clear */}
         <Card>
           <CardHeader>
             <CardTitle>Filters</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-4 items-end">
+            <div className="flex flex-wrap gap-4 items-end">
               <div>
-                <label className="block text-sm text-gray-600">From</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  From Date
+                </label>
                 <input
                   type="date"
                   value={fromDate}
                   onChange={(e) => setFromDate(e.target.value)}
-                  className="mt-1 px-2 py-1 border rounded"
+                  className="w-full min-w-[160px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600">To</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  To Date
+                </label>
                 <input
                   type="date"
                   value={toDate}
                   onChange={(e) => setToDate(e.target.value)}
-                  className="mt-1 px-2 py-1 border rounded"
+                  className="w-full min-w-[160px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div className="flex gap-2">
@@ -113,11 +158,10 @@ const StockPage = () => {
                   onClick={handleFetchClick}
                   disabled={!fromDate || !toDate || loading}
                   variant="default"
-                  size="sm"
                 >
                   {loading ? 'Loading...' : 'Fetch'}
                 </Button>
-                <Button onClick={handleClear} variant="outline" size="sm">
+                <Button onClick={handleClear} variant="outline">
                   Clear
                 </Button>
               </div>
@@ -125,114 +169,200 @@ const StockPage = () => {
           </CardContent>
         </Card>
 
+        {/* Stock Statement: one row per item */}
         <Card>
           <CardHeader>
-            <CardTitle>Current Stock Levels</CardTitle>
+            <CardTitle>
+              Stock Statement (Item-wise Summary)
+              {fromDate && toDate ? ` — ${fromDate} to ${toDate}` : ''}
+            </CardTitle>
+            <p className="text-sm text-gray-500">
+              Opening = Total Inward − Total Issue before From Date. Closing =
+              Opening + Inward − Issue in range. Expand a row to see transactions.
+            </p>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Item Code</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="text-right">Opening Stock</TableHead>
-                  <TableHead className="text-right">Inward Qty</TableHead>
-                  <TableHead className="text-right">Issue Qty</TableHead>
-                  <TableHead className="text-right">Closing Stock</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stockData.map((stock) => (
-                  <TableRow
-                    key={stock.item_code}
-                    data-testid={`stock-row-${stock.item_code}`}
-                    className={stock.closing_stk < 10 ? 'bg-red-50' : ''}
-                  >
-                    <TableCell className="font-medium">{stock.item_code}</TableCell>
-                    <TableCell>{stock.item_description}</TableCell>
-                    <TableCell>{stock.category}</TableCell>
-                    <TableCell className="text-right">{stock.opening_stk.toFixed(2)}</TableCell>
-                    <TableCell className="text-right text-green-600">{stock.inward_qty.toFixed(2)}</TableCell>
-                    <TableCell className="text-right text-red-600">{stock.issue_qty.toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-bold">{stock.closing_stk.toFixed(2)}</TableCell>
-                  </TableRow>
-                ))}
-                {stockData.length === 0 && (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                      No stock data available for the selected range.
-                    </TableCell>
+                    <TableHead className="w-10"></TableHead>
+                    <TableHead>Item Name / Item Code</TableHead>
+                    <TableHead className="text-right">Opening Stock</TableHead>
+                    <TableHead className="text-right">Inward Qty</TableHead>
+                    <TableHead className="text-right">Issue Qty</TableHead>
+                    <TableHead className="text-right">Rate</TableHead>
+                    <TableHead className="text-right">Closing Stock</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                </TableHeader>
+                <TableBody>
+                  {stockData.map((stock) => {
+                    const isExpanded = expandedItemCode === stock.item_code;
+                    const itemInwards = getInwardForItem(stock.item_code);
+                    const itemIssues = getIssueForItem(stock.item_code);
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Transactions {fromDate && toDate ? `(${fromDate} to ${toDate})` : ''}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h3 className="font-semibold mb-2">Inward Entries</h3>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Item Code</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
-                      <TableHead>Ref/ Supplier</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {inwardEntries.map((it) => (
-                      <TableRow key={it.entry_id}>
-                        <TableCell>{new Date(it.date).toLocaleString()}</TableCell>
-                        <TableCell>{it.item_code}</TableCell>
-                        <TableCell className="text-right">{it.inward_qty}</TableCell>
-                        <TableCell>{it.supplier || it.ref_no}</TableCell>
-                      </TableRow>
-                    ))}
-                    {inwardEntries.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center py-4 text-gray-500">No inward entries in range</TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                    return (
+                      <React.Fragment key={stock.item_code}>
+                        <TableRow
+                          data-testid={`stock-row-${stock.item_code}`}
+                          className={
+                            stock.closing_stk < 10
+                              ? 'bg-red-50 hover:bg-red-100'
+                              : 'hover:bg-muted/50'
+                          }
+                        >
+                          <TableCell className="w-10 p-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => toggleExpand(stock.item_code)}
+                              aria-expanded={isExpanded}
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {stock.item_description || stock.item_code}
+                            <span className="text-gray-500 text-sm ml-1">
+                              ({stock.item_code})
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {Number(stock.opening_stk).toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right text-green-600">
+                            {Number(stock.inward_qty).toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right text-red-600">
+                            {Number(stock.issue_qty).toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {stock.rate != null
+                              ? Number(stock.rate).toFixed(2)
+                              : '—'}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {Number(stock.closing_stk).toFixed(2)}
+                          </TableCell>
+                        </TableRow>
 
-              <div>
-                <h3 className="font-semibold mb-2">Issue Entries</h3>
-                <Table>
-                  <TableHeader>
+                        {/* Expandable: item-wise transaction details */}
+                        {isExpanded && (
+                          <TableRow
+                            data-testid={`stock-detail-${stock.item_code}`}
+                            className="bg-muted/30"
+                          >
+                            <TableCell
+                              colSpan={7}
+                              className="p-4 align-top"
+                            >
+                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pl-6">
+                                <div>
+                                  <h4 className="font-semibold mb-2">
+                                    Inward Entries (this item, date range)
+                                  </h4>
+                                  {itemInwards.length > 0 ? (
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Date</TableHead>
+                                          <TableHead className="text-right">
+                                            Quantity
+                                          </TableHead>
+                                          <TableHead>
+                                            Supplier / Reference
+                                          </TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {itemInwards.map((it) => (
+                                          <TableRow key={it.entry_id}>
+                                            <TableCell>
+                                              {new Date(
+                                                it.date
+                                              ).toLocaleDateString()}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                              {Number(it.inward_qty).toFixed(2)}
+                                            </TableCell>
+                                            <TableCell>
+                                              {it.supplier || it.ref_no || '—'}
+                                            </TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  ) : (
+                                    <p className="text-sm text-gray-500 py-4">
+                                      No inward entries in this period.
+                                    </p>
+                                  )}
+                                </div>
+                                <div>
+                                  <h4 className="font-semibold mb-2">
+                                    Issue Entries (this item, date range)
+                                  </h4>
+                                  {itemIssues.length > 0 ? (
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Date</TableHead>
+                                          <TableHead className="text-right">
+                                            Quantity
+                                          </TableHead>
+                                          <TableHead>Created By</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {itemIssues.map((it) => (
+                                          <TableRow key={it.entry_id}>
+                                            <TableCell>
+                                              {new Date(
+                                                it.date
+                                              ).toLocaleDateString()}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                              {Number(it.issued_qty).toFixed(2)}
+                                            </TableCell>
+                                            <TableCell>
+                                              {it.created_by_name ?? it.created_by ?? '—'}
+                                            </TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  ) : (
+                                    <p className="text-sm text-gray-500 py-4">
+                                      No issue entries in this period.
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+
+                  {stockData.length === 0 && (
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Item Code</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
-                      <TableHead>Created By</TableHead>
+                      <TableCell
+                        colSpan={7}
+                        className="text-center py-10 text-gray-500"
+                      >
+                        No stock data available for the selected range. Select
+                        From and To dates and click Fetch.
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {issueEntries.map((it) => (
-                      <TableRow key={it.entry_id}>
-                        <TableCell>{new Date(it.date).toLocaleString()}</TableCell>
-                        <TableCell>{it.item_code}</TableCell>
-                        <TableCell className="text-right">{it.issued_qty}</TableCell>
-                        <TableCell>{it.created_by}</TableCell>
-                      </TableRow>
-                    ))}
-                    {issueEntries.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center py-4 text-gray-500">No issue entries in range</TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </CardContent>
         </Card>
