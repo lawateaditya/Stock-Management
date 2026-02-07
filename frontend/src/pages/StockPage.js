@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { format, parseISO } from 'date-fns';
 import Layout from '@/components/Layout';
 import {
   Table,
@@ -116,11 +117,14 @@ const StockPage = () => {
     setExpandedItemCode((prev) => (prev === itemCode ? null : itemCode));
   };
 
-  /** Build flat rows for export (summary only, no transaction details). Includes Start Date & End Date from filters. */
+  /** Format YYYY-MM-DD as DD/MM/YYYY for display and export */
+  const toDDMMYYYY = (iso) => (iso ? format(parseISO(iso), 'dd/MM/yyyy') : '');
+
+  /** Build flat rows for export (summary only, no transaction details). Includes Start Date & End Date from filters (DD/MM/YYYY). */
   const getExportRows = () =>
     stockData.map((s) => ({
-      'Start Date': fromDate,
-      'End Date': toDate,
+      'Start Date': toDDMMYYYY(fromDate),
+      'End Date': toDDMMYYYY(toDate),
       'Item Code': s.item_code,
       'Item Name': s.item_description || s.item_code,
       'Opening Stock': Number(s.opening_stk),
@@ -221,7 +225,7 @@ const StockPage = () => {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle>
                 Stock Statement (Item-wise Summary)
-                {fromDate && toDate ? ` — ${fromDate} to ${toDate}` : ''}
+                {fromDate && toDate ? ` — ${toDDMMYYYY(fromDate)} to ${toDDMMYYYY(toDate)}` : ''}
               </CardTitle>
               <div className="flex gap-2">
                 <Button
@@ -353,9 +357,7 @@ const StockPage = () => {
                                         {itemInwards.map((it) => (
                                           <TableRow key={it.entry_id}>
                                             <TableCell>
-                                              {new Date(
-                                                it.date
-                                              ).toLocaleDateString()}
+                                              {format(new Date(it.date), 'dd/MM/yyyy')}
                                             </TableCell>
                                             <TableCell className="text-right">
                                               {Number(it.inward_qty).toFixed(2)}
@@ -392,9 +394,7 @@ const StockPage = () => {
                                         {itemIssues.map((it) => (
                                           <TableRow key={it.entry_id}>
                                             <TableCell>
-                                              {new Date(
-                                                it.date
-                                              ).toLocaleDateString()}
+                                              {format(new Date(it.date), 'dd/MM/yyyy')}
                                             </TableCell>
                                             <TableCell className="text-right">
                                               {Number(it.issued_qty).toFixed(2)}
