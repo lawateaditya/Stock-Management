@@ -12,7 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import api from '@/utils/api';
 import { toast } from 'sonner';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
+import { ChevronDown, ChevronRight, Download } from 'lucide-react';
 
 /**
  * Item-wise Stock Statement module.
@@ -112,6 +114,46 @@ const StockPage = () => {
     setExpandedItemCode((prev) => (prev === itemCode ? null : itemCode));
   };
 
+  /** Build flat rows for export (summary only, no transaction details) */
+  const getExportRows = () =>
+    stockData.map((s) => ({
+      'Item Code': s.item_code,
+      'Item Name': s.item_description || s.item_code,
+      'Opening Stock': Number(s.opening_stk),
+      'Inward Qty': Number(s.inward_qty),
+      'Issue Qty': Number(s.issue_qty),
+      Rate: s.rate != null ? Number(s.rate) : '',
+      'Closing Stock': Number(s.closing_stk),
+    }));
+
+  const handleDownloadCSV = () => {
+    if (!stockData.length) {
+      toast.error('No data to export. Fetch a stock statement first.');
+      return;
+    }
+    const csv = Papa.unparse(getExportRows());
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `stock-statement_${fromDate}_to_${toDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('CSV downloaded');
+  };
+
+  const handleDownloadExcel = () => {
+    if (!stockData.length) {
+      toast.error('No data to export. Fetch a stock statement first.');
+      return;
+    }
+    const ws = XLSX.utils.json_to_sheet(getExportRows());
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Stock Statement');
+    XLSX.writeFile(wb, `stock-statement_${fromDate}_to_${toDate}.xlsx`);
+    toast.success('Excel file downloaded');
+  };
+
   if (!user) return <div className="p-4">Loading...</div>;
 
   return (
@@ -172,10 +214,34 @@ const StockPage = () => {
         {/* Stock Statement: one row per item */}
         <Card>
           <CardHeader>
-            <CardTitle>
-              Stock Statement (Item-wise Summary)
-              {fromDate && toDate ? ` — ${fromDate} to ${toDate}` : ''}
-            </CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle>
+                Stock Statement (Item-wise Summary)
+                {fromDate && toDate ? ` — ${fromDate} to ${toDate}` : ''}
+              </CardTitle>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadCSV}
+                  disabled={!stockData.length}
+                  className="gap-1.5"
+                >
+                  <Download className="h-4 w-4" />
+                  CSV
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadExcel}
+                  disabled={!stockData.length}
+                  className="gap-1.5"
+                >
+                  <Download className="h-4 w-4" />
+                  Excel
+                </Button>
+              </div>
+            </div>
             <p className="text-sm text-gray-500">
               Opening = Total Inward − Total Issue before From Date. Closing =
               Opening + Inward − Issue in range. Expand a row to see transactions.
