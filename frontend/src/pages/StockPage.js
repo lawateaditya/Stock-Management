@@ -36,7 +36,7 @@ const StockPage = () => {
 
   useEffect(() => {
     fetchUser();
-    api.get('/suppliers').then((r) => setSuppliers(r.data || [])).catch(() => {});
+    api.get('/suppliers').then((r) => setSuppliers(r.data || [])).catch(() => { });
   }, []);
 
   const fetchUser = async () => {
@@ -132,9 +132,9 @@ const StockPage = () => {
         'Item Code': s.item_code,
         'Item Name': s.item_description || s.item_code,
         'Opening Stock': openingStk,
+        'Inward Rate': rate || '',
         'Inward Qty': Number(s.inward_qty),
         'Issue Qty': Number(s.issue_qty),
-        Rate: rate || '',
         'Opening Valuation': Number((rate * openingStk).toFixed(2)),
         'Closing Stock': closingStk,
         'Closing Valuation': Number((rate * closingStk).toFixed(2)),
