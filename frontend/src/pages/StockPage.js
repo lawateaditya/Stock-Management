@@ -133,7 +133,6 @@ const StockPage = () => {
         'Item Name': s.item_description || s.item_code,
         'Opening Stock': openingStk,
         'Inward Qty': Number(s.inward_qty),
-        'Inward Rate': rate || '',
         'Issue Qty': Number(s.issue_qty),
         Rate: rate || '',
         'Opening Valuation': Number((rate * openingStk).toFixed(2)),
@@ -356,9 +355,6 @@ const StockPage = () => {
                                           <TableHead className="text-right">
                                             Quantity
                                           </TableHead>
-                                          <TableHead className="text-right">
-                                            Inward Rate
-                                          </TableHead>
                                           <TableHead>
                                             Supplier / Reference
                                           </TableHead>
@@ -372,9 +368,6 @@ const StockPage = () => {
                                             </TableCell>
                                             <TableCell className="text-right">
                                               {Number(it.inward_qty).toFixed(2)}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                              {it.inward_rate != null ? Number(it.inward_rate).toFixed(2) : '—'}
                                             </TableCell>
                                             <TableCell>
                                               {suppliers.find(s => s.id === it.supplier)?.supplier_name || it.supplier || it.ref_no || '—'}
