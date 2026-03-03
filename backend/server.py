@@ -1091,7 +1091,10 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=os.environ.get(
+        'CORS_ORIGINS',
+        'http://localhost:3000'
+    ).split(','),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -1119,7 +1122,9 @@ async def startup_db():
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.users.insert_one(admin_doc)
+        print("Default super admin created: admin@inventory.com / Master@123")
         logger.info("Default super admin created: admin@inventory.com / Master@123")
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

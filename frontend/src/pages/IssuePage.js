@@ -106,7 +106,7 @@ const IssuePage = () => {
       toast.error('Please add at least one item');
       return;
     }
-    
+
     try {
       // Submit all items in temp list
       for (const item of tempItems) {
@@ -122,8 +122,8 @@ const IssuePage = () => {
       setIsDialogOpen(false);
       fetchEntries();
     } catch (error) {
-      const errorMsg = typeof error.response?.data?.detail === 'string' 
-        ? error.response.data.detail 
+      const errorMsg = typeof error.response?.data?.detail === 'string'
+        ? error.response.data.detail
         : 'Operation failed';
       toast.error(errorMsg);
     }
@@ -206,15 +206,38 @@ const IssuePage = () => {
                 <TableHead>Item Code</TableHead>
                 <TableHead>Item Description</TableHead>
                 <TableHead>Quantity Issued</TableHead>
+                <TableHead className="w-20">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {entries.map((entry) => (
+              {entries.map((entry,index) => (
                 <TableRow key={entry.entry_id} data-testid={`issue-row-${entry.entry_id}`}>
                   <TableCell>{format(new Date(entry.date), 'dd/MM/yyyy')}</TableCell>
                   <TableCell>{entry.item_code}</TableCell>
                   <TableCell>{entry.item_description}</TableCell>
                   <TableCell>{entry.issued_qty}</TableCell>
+                  <TableCell>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleEditItem(entry.entry_id)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteItem(entry.entry_id)}
+                          className="h-8 w-8 p-0 text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                 </TableRow>
               ))}
               {entries.length === 0 && (
@@ -241,7 +264,7 @@ const IssuePage = () => {
               <DialogTitle>Add Issue Entry</DialogTitle>
               <DialogDescription>Record items issued from inventory</DialogDescription>
             </DialogHeader>
-            
+
             <div className="space-y-6">
               {/* Form to add/edit items */}
               <form onSubmit={handleAddItem}>
@@ -318,8 +341,8 @@ const IssuePage = () => {
                     {editingIndex !== null ? 'Update Item' : 'Add Item'}
                   </Button>
                   {editingIndex !== null && (
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       variant="outline"
                       onClick={() => {
                         setEditingIndex(null);
@@ -387,7 +410,7 @@ const IssuePage = () => {
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button 
+              <Button
                 type="submit"
                 onClick={handleSubmit}
                 disabled={tempItems.length === 0}

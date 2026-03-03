@@ -119,27 +119,29 @@ const StockPage = () => {
 
   /** Format YYYY-MM-DD as DD/MM/YYYY for display and export */
   const toDDMMYYYY = (iso) => (iso ? format(parseISO(iso), 'dd/MM/yyyy') : '');
-
+  // There should be date only in the header and export, so we can use parseISO safely without time zone issues.
+  
   /** Build flat rows for export (summary only, no transaction details). Includes Start Date & End Date from filters (DD/MM/YYYY). */
   const getExportRows = () =>
-    stockData.map((s) => {
-      const rate = s.rate != null ? Number(s.rate) : 0;
-      const openingStk = Number(s.opening_stk);
-      const closingStk = Number(s.closing_stk);
-      return {
-        'Start Date': toDDMMYYYY(fromDate),
-        'End Date': toDDMMYYYY(toDate),
-        'Item Code': s.item_code,
-        'Item Name': s.item_description || s.item_code,
-        'Opening Stock': openingStk,
-        'Inward Qty': Number(s.inward_qty),
-        'Inward Rate': rate || '',
-        'Issue Qty': Number(s.issue_qty),
-        'Opening Valuation': Number((rate * openingStk).toFixed(2)),
-        'Closing Stock': closingStk,
-        'Closing Valuation': Number((rate * closingStk).toFixed(2)),
-      };
-    });
+  stockData.map((s) => {
+    const rate = s.rate != null ? Number(s.rate) : 0;
+    const closingRate = s.closing_rate != null ? Number(s.closing_rate) : 0;
+
+    const openingStk = Number(s.opening_stk) || 0;
+    const closingStk = Number(s.closing_stk) || 0;
+
+    return {
+      'Item Code': s.item_code,
+      'Item Name': s.item_description || s.item_code,
+      'Opening Stock': openingStk,
+      'Inward Qty': Number(s.inward_qty) || 0,
+      'Inward Rate': rate || '',
+      'Issue Qty': Number(s.issue_qty) || 0,
+      'Opening Valuation': Number((rate * openingStk).toFixed(2)),
+      'Closing Stock': closingStk,
+      'Closing Valuation': Number((closingRate * closingStk).toFixed(2)),
+    };
+  });
 
   const handleDownloadCSV = () => {
     if (!stockData.length) {
@@ -157,17 +159,33 @@ const StockPage = () => {
     toast.success('CSV downloaded');
   };
 
-  const handleDownloadExcel = () => {
-    if (!stockData.length) {
-      toast.error('No data to export. Fetch a stock statement first.');
-      return;
-    }
-    const ws = XLSX.utils.json_to_sheet(getExportRows());
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Stock Statement');
-    XLSX.writeFile(wb, `stock-statement_${fromDate}_to_${toDate}.xlsx`);
-    toast.success('Excel file downloaded');
-  };
+ const handleDownloadExcel = () => {
+  if (!stockData.length) {
+    toast.error('No data to export. Fetch a stock statement first.');
+    return;
+  }
+
+  const rows = getExportRows();
+
+  const ws = XLSX.utils.json_to_sheet([]);
+
+  // Add header title
+  XLSX.utils.sheet_add_aoa(ws, [
+    [`Stock Statement From ${toDDMMYYYY(fromDate)} To ${toDDMMYYYY(toDate)}`],
+  ], { origin: 'A1' });
+
+  // Add blank row
+  XLSX.utils.sheet_add_aoa(ws, [[]], { origin: 'A2' });
+
+  // Add table starting from row 3
+  XLSX.utils.sheet_add_json(ws, rows, { origin: 'A3' });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Stock Statement');
+
+  XLSX.writeFile(wb, `stock-statement_${fromDate}_to_${toDate}.xlsx`);
+  toast.success('Excel file downloaded');
+};
 
   if (!user) return <div className="p-4">Loading...</div>;
 

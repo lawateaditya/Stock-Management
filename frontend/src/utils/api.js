@@ -5,7 +5,7 @@ export const API = `${BACKEND_URL}/api`;
 
 const api = axios.create({
   baseURL: API,
-  withCredentials: true,
+  // withCredentials: true,
 });
 
 // Add auth token to requests
@@ -24,7 +24,9 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/';
+      if (!window.location.pathname.includes('/login')) {
+        window.location.replace('/');
+      }
     }
     return Promise.reject(error);
   }
