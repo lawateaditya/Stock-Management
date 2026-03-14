@@ -164,6 +164,7 @@ class IssueEntry(BaseModel):
     item_code: str
     item_description: str
     issued_qty: float
+    issue_rate: Optional[float] = None
     created_by: str  # user_id stored in DB
     created_by_name: Optional[str] = None  # resolved from users collection for display
     created_at: datetime
@@ -816,11 +817,16 @@ async def create_inward_entry(
     await db.tbl_inward.insert_one(entry_doc)
 
     # Create stock balance record for FIFO
+    # Ensure inward_date is stored as a timezone-aware datetime (UTC)
+    inward_dt = entry_input.date
+    if inward_dt.tzinfo is None:
+        inward_dt = inward_dt.replace(tzinfo=timezone.utc)
+
     balance_doc = {
         "item_code": entry_input.item_code,
         "inward_entry_id": entry_id,
         "remaining_qty": entry_input.inward_qty,
-        "inward_date": entry_input.date,
+        "inward_date": inward_dt,
         "rate": entry_input.inward_rate
     }
     await db.stock_balances.insert_one(balance_doc)
@@ -949,33 +955,35 @@ async def create_issue_entry(
             detail=f"Insufficient stock. Available: {available_stock}"
         )
 
-    # FIFO deduction from stock_balances
+    # FIFO deduction from stock_balances and compute weighted-average issue rate
     remaining_to_issue = entry_input.issued_qty
+    total_value = 0.0
     while remaining_to_issue > 0:
-        # Find oldest available balance
-        balance = await db.stock_balances.find_one_and_update(
+        # Find the oldest available balance (FIFO)
+        balance = await db.stock_balances.find_one(
             {
                 "item_code": entry_input.item_code,
                 "remaining_qty": {"$gt": 0}
             },
-            [
-                {"$sort": {"inward_date": 1, "_id": 1}},
-                {"$limit": 1}
-            ],
-            sort=[("inward_date", 1), ("_id", 1)],
-            return_document=True
+            sort=[("inward_date", 1), ("_id", 1)]
         )
-        
+
         if not balance:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Stock balance inconsistency"
             )
-        
+
         deduct_qty = min(remaining_to_issue, balance["remaining_qty"])
-        
+        # accumulate value for weighted average
+        try:
+            batch_rate = float(balance.get("rate", 0))
+        except Exception:
+            batch_rate = 0.0
+        total_value += deduct_qty * batch_rate
+
         new_remaining = balance["remaining_qty"] - deduct_qty
-        
+
         if new_remaining > 0:
             await db.stock_balances.update_one(
                 {"_id": balance["_id"]},
@@ -983,8 +991,11 @@ async def create_issue_entry(
             )
         else:
             await db.stock_balances.delete_one({"_id": balance["_id"]})
-        
+
         remaining_to_issue -= deduct_qty
+
+    # compute weighted avg rate
+    issue_rate = (total_value / entry_input.issued_qty) if entry_input.issued_qty else 0.0
     
     entry_id = f"issue_{uuid.uuid4().hex[:12]}"
     entry_doc = {
@@ -993,6 +1004,7 @@ async def create_issue_entry(
         "item_code": entry_input.item_code,
         "item_description": item_doc["item_name"],
         "issued_qty": entry_input.issued_qty,
+        "issue_rate": issue_rate,
         "created_by": current_user.user_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -1031,6 +1043,104 @@ async def delete_issue_entry(
     await db.tbl_issue.delete_one({"entry_id": entry_id})
     
     return {"message": "Issue entry deleted successfully"}
+
+
+@api_router.get("/stats")
+async def get_stats(current_user: User = Depends(get_current_user)):
+    """Return aggregated stats for dashboard. If user is an issuer_user, restrict issue totals to that user."""
+    # total items
+    try:
+        total_items = await db.item_master.count_documents({})
+    except Exception:
+        total_items = 0
+
+    # total inward qty
+    try:
+        res = await db.tbl_inward.aggregate([
+            {"$group": {"_id": None, "total": {"$sum": "$inward_qty"}}}
+        ]).to_list(1)
+        total_inward = res[0]["total"] if res else 0
+    except Exception:
+        total_inward = 0
+
+    # total issues and total value issued
+    match_stage = {}
+    if current_user.role == UserRole.ISSUER_USER:
+        match_stage = {"created_by": current_user.user_id}
+
+    try:
+        pipeline_issue = []
+        if match_stage:
+            pipeline_issue.append({"$match": match_stage})
+        pipeline_issue.append({"$group": {"_id": None, "total": {"$sum": "$issued_qty"}}})
+        res2 = await db.tbl_issue.aggregate(pipeline_issue).to_list(1)
+        total_issue = res2[0]["total"] if res2 else 0
+    except Exception:
+        total_issue = 0
+
+    try:
+        pipeline_value = []
+        if match_stage:
+            pipeline_value.append({"$match": match_stage})
+        pipeline_value.extend([
+            {"$project": {"value": {"$multiply": ["$issued_qty", {"$ifNull": ["$issue_rate", 0]}]}}},
+            {"$group": {"_id": None, "total": {"$sum": "$value"}}}
+        ])
+        res3 = await db.tbl_issue.aggregate(pipeline_value).to_list(1)
+        total_value_issued = res3[0]["total"] if res3 else 0
+    except Exception:
+        total_value_issued = 0
+
+    return {
+        "totalItems": total_items,
+        "totalInward": total_inward,
+        "totalIssue": total_issue,
+        "totalValueIssued": total_value_issued,
+        "lowStock": 0,
+    }
+
+
+@api_router.get("/stock_balances/estimate_rate")
+async def estimate_issue_rate(item_code: str, qty: float = 0.0, current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.ISSUER_USER, UserRole.SUPER_ADMIN]))):
+    """
+    Estimate the issue rate for a requested quantity using FIFO on stock_balances without modifying DB.
+    Returns: { "issue_rate": float, "available_stock": float }
+    """
+    try:
+        # aggregate available total
+        balance_pipeline = [
+            {"$match": {"item_code": item_code}},
+            {"$group": {"_id": None, "total": {"$sum": "$remaining_qty"}}}
+        ]
+        balance_result = await db.stock_balances.aggregate(balance_pipeline).to_list(1)
+        available_stock = balance_result[0]["total"] if balance_result else 0
+
+        if qty <= 0:
+            return {"issue_rate": 0.0, "available_stock": available_stock}
+
+        remaining = qty
+        total_value = 0.0
+
+        # iterate balances in FIFO order
+        cursor = db.stock_balances.find({"item_code": item_code, "remaining_qty": {"$gt": 0}}).sort([("inward_date", 1), ("_id", 1)])
+        async for bal in cursor:
+            if remaining <= 0:
+                break
+            avail = bal.get("remaining_qty", 0)
+            use_qty = min(remaining, avail)
+            rate = float(bal.get("rate", 0) or 0)
+            total_value += use_qty * rate
+            remaining -= use_qty
+
+        if remaining > 0:
+            # insufficient stock
+            estimated = (total_value / (qty - remaining)) if (qty - remaining) > 0 else 0.0
+            return {"issue_rate": estimated, "available_stock": available_stock}
+
+        estimated = (total_value / qty) if qty > 0 else 0.0
+        return {"issue_rate": estimated, "available_stock": available_stock}
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 # ==================== STOCK STATEMENT ROUTES ====================
 # Item-wise stock statement: one row per item.

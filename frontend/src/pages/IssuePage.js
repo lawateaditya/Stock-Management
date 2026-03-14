@@ -25,6 +25,7 @@ const IssuePage = () => {
     item_code: '',
     issued_qty: '',
   });
+  const [estimatedRate, setEstimatedRate] = useState(null);
 
   // Calculate available quantity for each item
   const getAvailableQuantity = (itemCode) => {
@@ -129,7 +130,7 @@ const IssuePage = () => {
     }
   };
 
-  const handleAddItem = (e) => {
+  const handleAddItem = async (e) => {
     e.preventDefault();
     if (!formData.item_code || !formData.issued_qty) {
       toast.error('Please fill all fields');
@@ -152,12 +153,41 @@ const IssuePage = () => {
       setEditingIndex(null);
       toast.success('Item updated');
     } else {
-      // Add new item
-      setTempItems([...tempItems, { ...formData }]);
-      toast.success('Item added to list');
+      // Add new item - estimate issue rate from backend
+      try {
+        const res = await api.get('/stock_balances/estimate_rate', { params: { item_code: formData.item_code, qty: requestedQty } });
+        const issue_rate = res.data?.issue_rate ?? 0;
+        setTempItems([...tempItems, { ...formData, issue_rate }]);
+        toast.success('Item added to list');
+      } catch (err) {
+        console.error('Rate estimate failed', err);
+        toast.error('Failed to estimate issue rate');
+        return;
+      }
     }
     resetForm();
   };
+
+  // estimate rate when item or qty changes
+  useEffect(() => {
+    let cancelled = false;
+    const doEstimate = async () => {
+      const item = formData.item_code;
+      const qty = parseFloat(formData.issued_qty || 0);
+      if (!item || !qty) {
+        setEstimatedRate(null);
+        return;
+      }
+      try {
+        const res = await api.get('/stock_balances/estimate_rate', { params: { item_code: item, qty } });
+        if (!cancelled) setEstimatedRate(res.data?.issue_rate ?? null);
+      } catch (err) {
+        if (!cancelled) setEstimatedRate(null);
+      }
+    };
+    doEstimate();
+    return () => { cancelled = true; };
+  }, [formData.item_code, formData.issued_qty]);
 
   const handleEditItem = (index) => {
     setFormData(tempItems[index]);
@@ -172,6 +202,17 @@ const IssuePage = () => {
       resetForm();
     }
     toast.success('Item removed');
+  };
+
+  const handleDeleteEntry = async (entry_id) => {
+    try {
+      await api.delete(`/issue/${entry_id}`);
+      toast.success('Issue entry deleted');
+      fetchEntries();
+    } catch (error) {
+      const errorMsg = error?.response?.data?.detail || 'Failed to delete entry';
+      toast.error(errorMsg);
+    }
   };
 
   const resetForm = () => {
@@ -201,55 +242,60 @@ const IssuePage = () => {
         <div className="bg-white rounded-lg shadow">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Item Code</TableHead>
-                <TableHead>Item Description</TableHead>
-                <TableHead>Quantity Issued</TableHead>
-                {( user && (user.role === 'admin' || user.role === 'super_admin')) && (
-                  <TableHead className="w-20">Actions</TableHead>
-                )}
-              </TableRow>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Item Code</TableHead>
+                  <TableHead>Item Description</TableHead>
+                  <TableHead>Quantity Issued</TableHead>
+                  <TableHead>Rate</TableHead>
+                  {( user && (user.role === 'admin' || user.role === 'super_admin')) && (
+                    <TableHead className="w-20">Actions</TableHead>
+                  )}
+                </TableRow>
             </TableHeader>
             <TableBody>
-              {entries.map((entry, index) => (
+                        {entries.map((entry, index) => (
                 <TableRow key={entry.entry_id} data-testid={`issue-row-${entry.entry_id}`}>
                   <TableCell>{format(new Date(entry.date), 'dd/MM/yyyy')}</TableCell>
                   <TableCell>{entry.item_code}</TableCell>
                   <TableCell>{entry.item_description}</TableCell>
                   <TableCell>{entry.issued_qty}</TableCell>
+                  <TableCell>{entry.issue_rate ? Number(entry.issue_rate).toFixed(2) : '-'}</TableCell>
                   <TableCell>
-                    <div className="flex gap-2">
-                      {(user && (user.role === 'admin' || user.role === 'super_admin')) && (
-                        <>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteItem(index)}
-                            className="h-8 w-8 p-0 text-red-600"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteItem(index)}
-                            className="h-8 w-8 p-0 text-red-600"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </>
-
-                      )}
-                    </div>
+                      <div className="flex gap-2">
+                        {(user && (user.role === 'admin' || user.role === 'super_admin')) && (
+                          <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                // Edit of existing entries isn't implemented; prefill dialog for quick correction
+                                setTempItems([{ date: format(new Date(entry.date), 'yyyy-MM-dd'), item_code: entry.item_code, issued_qty: entry.issued_qty }]);
+                                setIsDialogOpen(true);
+                              }}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteEntry(entry.entry_id)}
+                              className="h-8 w-8 p-0 text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
                   </TableCell>
                 </TableRow>
               ))}
               {entries.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={5} className="text-center py-8 text-gray-500">
                     No issue entries found. Add your first entry to get started.
                   </TableCell>
                 </TableRow>
@@ -335,9 +381,12 @@ const IssuePage = () => {
                       required
                     />
                     {formData.item_code && (
-                      <p className="text-xs mt-1 text-gray-600">
-                        Available: {getAvailableQuantity(formData.item_code).toFixed(2)} units
-                      </p>
+                      <>
+                        <p className="text-xs mt-1 text-gray-600">
+                          Available: {getAvailableQuantity(formData.item_code).toFixed(2)} units
+                        </p>
+                        <p className="text-xs mt-1 text-gray-600">Rate: {estimatedRate !== null ? Number(estimatedRate).toFixed(2) : '-'}</p>
+                      </>
                     )}
                   </div>
                 </div>
@@ -373,6 +422,7 @@ const IssuePage = () => {
                           <TableHead>Date</TableHead>
                           <TableHead>Item Code</TableHead>
                           <TableHead>Quantity</TableHead>
+                          <TableHead>Rate</TableHead>
                           <TableHead className="w-20">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -382,6 +432,7 @@ const IssuePage = () => {
                             <TableCell>{item.date}</TableCell>
                             <TableCell>{item.item_code}</TableCell>
                             <TableCell>{item.issued_qty}</TableCell>
+                            <TableCell>{typeof item.issue_rate === 'number' ? item.issue_rate.toFixed(2) : '-'}</TableCell>
                             <TableCell>
                               <div className="flex gap-2">
                                 <Button
@@ -418,7 +469,7 @@ const IssuePage = () => {
                 Cancel
               </Button>
               <Button
-                type="submit"
+                type="button"
                 onClick={handleSubmit}
                 disabled={tempItems.length === 0}
                 data-testid="save-issue-btn"

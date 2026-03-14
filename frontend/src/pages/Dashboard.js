@@ -21,21 +21,22 @@ const Dashboard = () => {
     const fetchStats = async () => {
       try {
         const promises = [];
-        
-        // Always try to fetch items
+
+        // Always try to fetch items/inward/issue for backward compat
         promises.push(api.get('/items').catch(() => ({ data: [] })));
-        
-        // Fetch inward/issue based on role
         promises.push(api.get('/inward').catch(() => ({ data: [] })));
         promises.push(api.get('/issue').catch(() => ({ data: [] })));
+        // Server-side aggregated stats (includes totalValueIssued)
+        promises.push(api.get('/stats').catch(() => ({ data: {} })));
 
-        const [itemsRes, inwardRes, issueRes] = await Promise.all(promises);
+        const [itemsRes, inwardRes, issueRes, statsRes] = await Promise.all(promises);
 
         setStats({
-          totalItems: itemsRes.data?.length || 0,
-          totalInward: (inwardRes.data || []).reduce((sum, entry) => sum + (entry.inward_qty || 0), 0),
-          totalIssue: (issueRes.data || []).reduce((sum, entry) => sum + (entry.issued_qty || 0), 0),
-          lowStock: 0,
+          totalItems: statsRes.data?.totalItems ?? itemsRes.data?.length ?? 0,
+          totalInward: statsRes.data?.totalInward ?? (inwardRes.data || []).reduce((sum, entry) => sum + (entry.inward_qty || 0), 0),
+          totalIssue: statsRes.data?.totalIssue ?? (issueRes.data || []).reduce((sum, entry) => sum + (entry.issued_qty || 0), 0),
+          lowStock: statsRes.data?.lowStock ?? 0,
+          totalValueIssued: statsRes.data?.totalValueIssued ?? 0,
         });
       } catch (error) {
         console.error('Failed to fetch stats:', error);
@@ -44,6 +45,7 @@ const Dashboard = () => {
           totalInward: 0,
           totalIssue: 0,
           lowStock: 0,
+          totalValueIssued: 0,
         });
       }
     };
@@ -79,6 +81,13 @@ const Dashboard = () => {
       icon: BarChart3,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
+    },
+    {
+      title: 'Total Value Issued',
+      value: (stats.totalValueIssued || 0).toFixed(2),
+      icon: TrendingDown,
+      color: 'text-indigo-600',
+      bgColor: 'bg-indigo-50',
     },
   ];
 
