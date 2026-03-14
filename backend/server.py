@@ -173,6 +173,14 @@ class IssueEntryCreate(BaseModel):
     item_code: str
     issued_qty: float
 
+class StockBalance(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    item_code: str
+    inward_entry_id: str
+    remaining_qty: float
+    inward_date: datetime
+    rate: float
+
 class StockStatement(BaseModel):
     item_code: str
     item_description: str
@@ -807,6 +815,16 @@ async def create_inward_entry(
     
     await db.tbl_inward.insert_one(entry_doc)
 
+    # Create stock balance record for FIFO
+    balance_doc = {
+        "item_code": entry_input.item_code,
+        "inward_entry_id": entry_id,
+        "remaining_qty": entry_input.inward_qty,
+        "inward_date": entry_input.date,
+        "rate": entry_input.inward_rate
+    }
+    await db.stock_balances.insert_one(balance_doc)
+
     # Update item master rate to this inward's rate
     await db.item_master.update_one(
         {"item_code": entry_input.item_code},
@@ -917,28 +935,56 @@ async def create_issue_entry(
             detail="Item not found"
         )
     
-    # Calculate available stock
-    inward_pipeline = [
+    # Calculate available stock from stock_balances (FIFO)
+    balance_pipeline = [
         {"$match": {"item_code": entry_input.item_code}},
-        {"$group": {"_id": None, "total": {"$sum": "$inward_qty"}}}
+        {"$group": {"_id": None, "total": {"$sum": "$remaining_qty"}}}
     ]
-    inward_result = await db.tbl_inward.aggregate(inward_pipeline).to_list(1)
-    total_inward = inward_result[0]["total"] if inward_result else 0
-    
-    issue_pipeline = [
-        {"$match": {"item_code": entry_input.item_code}},
-        {"$group": {"_id": None, "total": {"$sum": "$issued_qty"}}}
-    ]
-    issue_result = await db.tbl_issue.aggregate(issue_pipeline).to_list(1)
-    total_issued = issue_result[0]["total"] if issue_result else 0
-    
-    available_stock = total_inward - total_issued
+    balance_result = await db.stock_balances.aggregate(balance_pipeline).to_list(1)
+    available_stock = balance_result[0]["total"] if balance_result else 0
     
     if entry_input.issued_qty > available_stock:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Insufficient stock. Available: {available_stock}"
         )
+
+    # FIFO deduction from stock_balances
+    remaining_to_issue = entry_input.issued_qty
+    while remaining_to_issue > 0:
+        # Find oldest available balance
+        balance = await db.stock_balances.find_one_and_update(
+            {
+                "item_code": entry_input.item_code,
+                "remaining_qty": {"$gt": 0}
+            },
+            [
+                {"$sort": {"inward_date": 1, "_id": 1}},
+                {"$limit": 1}
+            ],
+            sort=[("inward_date", 1), ("_id", 1)],
+            return_document=True
+        )
+        
+        if not balance:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Stock balance inconsistency"
+            )
+        
+        deduct_qty = min(remaining_to_issue, balance["remaining_qty"])
+        
+        new_remaining = balance["remaining_qty"] - deduct_qty
+        
+        if new_remaining > 0:
+            await db.stock_balances.update_one(
+                {"_id": balance["_id"]},
+                {"$set": {"remaining_qty": new_remaining}}
+            )
+        else:
+            await db.stock_balances.delete_one({"_id": balance["_id"]})
+        
+        remaining_to_issue -= deduct_qty
     
     entry_id = f"issue_{uuid.uuid4().hex[:12]}"
     entry_doc = {
@@ -1124,6 +1170,11 @@ async def startup_db():
         await db.users.insert_one(admin_doc)
         print("Default super admin created: admin@inventory.com / Master@123")
         logger.info("Default super admin created: admin@inventory.com / Master@123")
+
+    # Create indexes for stock_balances
+    await db.stock_balances.create_index([("item_code", 1), ("inward_date", 1)])
+    await db.stock_balances.create_index("inward_entry_id")
+    logger.info("Stock balances indexes created")
 
 
 @app.on_event("shutdown")

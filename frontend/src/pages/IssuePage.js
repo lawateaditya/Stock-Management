@@ -206,38 +206,45 @@ const IssuePage = () => {
                 <TableHead>Item Code</TableHead>
                 <TableHead>Item Description</TableHead>
                 <TableHead>Quantity Issued</TableHead>
-                <TableHead className="w-20">Actions</TableHead>
+                {( user && (user.role === 'admin' || user.role === 'super_admin')) && (
+                  <TableHead className="w-20">Actions</TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {entries.map((entry,index) => (
+              {entries.map((entry, index) => (
                 <TableRow key={entry.entry_id} data-testid={`issue-row-${entry.entry_id}`}>
                   <TableCell>{format(new Date(entry.date), 'dd/MM/yyyy')}</TableCell>
                   <TableCell>{entry.item_code}</TableCell>
                   <TableCell>{entry.item_description}</TableCell>
                   <TableCell>{entry.issued_qty}</TableCell>
                   <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleEditItem(entry.entry_id)}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteItem(entry.entry_id)}
-                          className="h-8 w-8 p-0 text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                    <div className="flex gap-2">
+                      {(user && (user.role === 'admin' || user.role === 'super_admin')) && (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteItem(index)}
+                            className="h-8 w-8 p-0 text-red-600"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteItem(index)}
+                            className="h-8 w-8 p-0 text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+
+                      )}
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
               {entries.length === 0 && (
@@ -422,7 +429,7 @@ const IssuePage = () => {
           </DialogContent>
         </Dialog>
       </div>
-    </Layout>
+    </Layout >
   );
 };
 

@@ -83,7 +83,7 @@ const InwardPage = () => {
       toast.error('Please add at least one item');
       return;
     }
-    
+
     try {
       // Submit all items in temp list
       for (const item of tempItems) {
@@ -102,8 +102,8 @@ const InwardPage = () => {
       setIsDialogOpen(false);
       fetchEntries();
     } catch (error) {
-      const errorMsg = typeof error.response?.data?.detail === 'string' 
-        ? error.response.data.detail 
+      const errorMsg = typeof error.response?.data?.detail === 'string'
+        ? error.response.data.detail
         : 'Operation failed';
       toast.error(errorMsg);
     }
@@ -254,7 +254,7 @@ const InwardPage = () => {
               <DialogTitle>Add Inward Entry</DialogTitle>
               <DialogDescription>Record items received into inventory</DialogDescription>
             </DialogHeader>
-            
+
             <div className="space-y-6">
               {/* Form to add/edit items */}
               <form onSubmit={handleAddItem}>
@@ -268,7 +268,7 @@ const InwardPage = () => {
                       value={formData.date}
                       onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                       required
-                      // {format(new Date(entry.date), 'dd/MM/yyyy')}
+                    // {format(new Date(entry.date), 'dd/MM/yyyy')}
                     />
                   </div>
                   <div>
@@ -367,8 +367,8 @@ const InwardPage = () => {
                     {editingIndex !== null ? 'Update Item' : 'Add Item'}
                   </Button>
                   {editingIndex !== null && (
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       variant="outline"
                       onClick={() => {
                         setEditingIndex(null);
@@ -394,8 +394,10 @@ const InwardPage = () => {
                           <TableHead>Quantity</TableHead>
                           <TableHead>Rate</TableHead>
                           <TableHead>Supplier</TableHead>
-                          <TableHead>Ref No</TableHead>
-                          <TableHead className="w-20">Actions</TableHead>
+                          <TableHead>Ref No</TableHead>   
+                          {(user && (user.role === 'admin' || user.role === 'super_admin')) && (
+                            <TableHead className="w-20">Actions</TableHead>
+                          )}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -407,26 +409,32 @@ const InwardPage = () => {
                             <TableCell>{parseFloat(item.inward_rate).toFixed(2)}</TableCell>
                             <TableCell>{suppliers.find(s => s.id === item.supplier)?.supplier_name || item.supplier}</TableCell>
                             <TableCell>{item.ref_no}</TableCell>
+
                             <TableCell>
                               <div className="flex gap-2">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleEditItem(index)}
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleDeleteItem(index)}
-                                  className="h-8 w-8 p-0 text-red-600"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                {(user && (user.role === 'admin' || user.role === 'super_admin')) && (
+                                  <>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleDeleteItem(index)}
+                                      className="h-8 w-8 p-0 text-red-600"
+                                    >
+                                      <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleDeleteItem(index)}
+                                      className="h-8 w-8 p-0 text-red-600"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </>
+
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -442,7 +450,7 @@ const InwardPage = () => {
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button 
+              <Button
                 type="submit"
                 onClick={handleSubmit}
                 disabled={tempItems.length === 0}
