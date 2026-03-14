@@ -32,13 +32,19 @@ const Dashboard = () => {
         const [itemsRes, inwardRes, issueRes] = await Promise.all(promises);
 
         setStats({
-          totalItems: itemsRes.data.length,
-          totalInward: inwardRes.data.reduce((sum, entry) => sum + entry.inward_qty, 0),
-          totalIssue: issueRes.data.reduce((sum, entry) => sum + entry.issued_qty, 0),
+          totalItems: itemsRes.data?.length || 0,
+          totalInward: (inwardRes.data || []).reduce((sum, entry) => sum + (entry.inward_qty || 0), 0),
+          totalIssue: (issueRes.data || []).reduce((sum, entry) => sum + (entry.issued_qty || 0), 0),
           lowStock: 0,
         });
       } catch (error) {
         console.error('Failed to fetch stats:', error);
+        setStats({
+          totalItems: 0,
+          totalInward: 0,
+          totalIssue: 0,
+          lowStock: 0,
+        });
       }
     };
 
@@ -76,7 +82,7 @@ const Dashboard = () => {
     },
   ];
 
-  if (!user || loading) {
+  if (!user && loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-lg">Loading...</div>

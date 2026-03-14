@@ -8,11 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Package, Lock, Mail, User } from 'lucide-react';
 import api from '@/utils/api';
 import { toast } from 'sonner';
+import { useUser } from '@/context/UserContext';
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('login');
   const [isLoading, setIsLoading] = useState(false);
+  const { setUser } = useUser();
 
   // Login state
   const [loginData, setLoginData] = useState({ email: '', password: '' });
@@ -33,6 +35,8 @@ const LoginPage = () => {
       const response = await api.post('/auth/login', loginData);
       localStorage.setItem('token', response.data.access_token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      // update context so ProtectedRoute sees the user immediately
+      try { setUser(response.data.user); } catch (e) {}
       toast.success('Login successful!');
       navigate('/dashboard', { state: { user: response.data.user } });
     } catch (error) {
@@ -50,6 +54,8 @@ const LoginPage = () => {
       const response = await api.post('/auth/register', registerData);
       localStorage.setItem('token', response.data.access_token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      // update context so ProtectedRoute sees the user immediately
+      try { setUser(response.data.user); } catch (e) {}
       toast.success('Registration successful!');
       navigate('/dashboard', { state: { user: response.data.user } });
     } catch (error) {
